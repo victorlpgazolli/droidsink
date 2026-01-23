@@ -1,0 +1,1 @@
+adb shell am start -n dev.victorlpgazolli.mobilesink/.MainActivity
