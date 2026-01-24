@@ -138,10 +138,18 @@ The Android app reads the incoming audio stream and plays it using `AudioTrack`.
 
 
 ### Troubleshooting
-LibUsb Errors: Ensure no other application (like a tethering manager) is locking the USB device.
+
+If you see a message saying that there is no application installed on the device to handle the accessory, you could try manually installing the APK.
+```bash
+./droidsink install
+./droidsink run
+```
+
+LibUsb Errors: Ensure no other application (like a tethering manager) is locking the USB device, normally changing the usb configuration mode to any other mode and trying running again helps.
+- like `USB error: LIBUSB_ERROR_TIMEOUT`
 
 Device not found: Ensure USB Debugging is enabled on the Android device and that it is properly connected.
 
 `Sox or BlackHole 2ch or adb` Not Found: Ensure they are in your PATH.
 
-If the device fails to switch to Accessory Mode, try reconnecting the USB cable.
+If the device fails to switch to Accessory Mode, try changing the usb configuration mode to any other mode and run the cli again.
