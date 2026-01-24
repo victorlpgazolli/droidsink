@@ -1,6 +1,6 @@
 # DroidSink
 
-DroidSink is an audio streaming tool built with Kotlin Multiplatform that **forwards PCM audio from a computer to a Android device**. It utilizes the Android Open Accessory (AOA) protocol to establish a direct USB data link.
+DroidSink is an audio streaming tool built with [Kotlin Multiplatform](https://kotlinlang.org/multiplatform/) that **forwards [PCM](https://en.wikipedia.org/wiki/Pulse-code_modulation) audio from a computer to a Android device**. It utilizes the [Android Open Accessory (AOA)](https://source.android.com/docs/core/interaction/accessories/protocol) protocol to establish a direct USB data link.
 
 The project is designed to **capture audio from a virtual device** on the computer (like BlackHole) and **stream it directly to a connected Android peripheral**. Currently, it supports macOS as the host platform, with plans to extend support to Windows and Linux in the future.
 
@@ -28,10 +28,11 @@ To run DroidSink, your system must have the following software installed:
 
 #### Android Device Requirements
 
-- USB Debugging must be enabled.
+- [USB Debugging must be enabled.](https://developer.android.com/studio/debug/dev-options#debugging)
 
 - The device must support Accessory Mode (AOA).
 
+> to check if your device supports AOA, connect the device and run `adb shell ls /system/etc/permissions | grep usb.accessory`, if you see a file named something like `usb.accessory.xml`, your device supports AOA.
 
 ## Usage
 
