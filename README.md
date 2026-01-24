@@ -28,7 +28,7 @@ To run DroidSink, your system must have the following software installed:
     
 - [`adb`](https://formulae.brew.sh/cask/android-platform-tools): Required for initial device communication and app installation.
 
-#### Android Device Requirements
+### Android Device Requirements
 
 - [USB Debugging must be enabled.](https://developer.android.com/studio/debug/dev-options#debugging)
 
@@ -139,7 +139,7 @@ The Android app reads the incoming audio stream and plays it using `AudioTrack`.
  </details>
 
 
-### Troubleshooting
+## Troubleshooting
 
 If you see a message saying that there is no application installed on the device to handle the accessory, you could try manually installing the APK.
 ```bash
@@ -155,3 +155,17 @@ Device not found: Ensure USB Debugging is enabled on the Android device and that
 `Sox or BlackHole 2ch or adb` Not Found: Ensure they are in your PATH.
 
 If the device fails to switch to Accessory Mode, try changing the usb configuration mode to any other mode and run the cli again.
+
+## Development
+
+Install the dependencies listed in the Prerequisites section.
+To build and run the project in debug mode, use the following commands:
+
+```bash
+# Android App
+./gradlew :droidsink:assembleDebug # Build the Android app in debug mode.
+./gradlew :droidsink:installDebug # Install the app in debug mode.
+# CLI
+./gradlew :droidsink:runDebugExecutable # Build & run the CLI in debug mode.
+# the final binary will be located at: ./droidsink/build/bin/native/debugExecutable/droidsink.kexe
+```
