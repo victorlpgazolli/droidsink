@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalForeignApi::class)
+
 import kotlinx.cinterop.*
 import platform.posix.*
 import kotlin.time.Duration.Companion.seconds
@@ -67,8 +69,31 @@ fun startService() {
     println("Starting foreground service on device...")
     exec("adb shell am start-foreground-service -n dev.victorlpgazolli.mobilesink/.AccessoryService")
 }
+data class RequiredSoftwareNotFoundException(
+    val softwareName: String,
+    override val message: String = "Required software: $softwareName not found."
+) : Exception(message)
 
-private fun UsbInterop.deviceInAccessoryModeOrNull(): Peripheral? {
+fun ensureSoxIsInstalledOrThrow() {
+    val soxBinaryLocation = exec("which sox").trim()
+    if (soxBinaryLocation.isEmpty()) {
+        throw RequiredSoftwareNotFoundException("sox")
+    } else {
+        println("Found sox at: $soxBinaryLocation")
+    }
+}
+
+fun ensureBlackholeIsInstalledOrThrow() {
+    val out = exec("system_profiler SPAudioDataType")
+    val isBlackHoleInstalled = out.contains("BlackHole 2ch")
+    if (isBlackHoleInstalled.not()) {
+        throw RequiredSoftwareNotFoundException("blackhole-2ch")
+    } else {
+        println("BlackHole virtual audio device is installed.")
+    }
+}
+
+private fun UsbSession.deviceInAccessoryModeOrNull(): Peripheral? {
     val selectedPeripheral = listAccessories().firstOrNull { it.hasAdb() } ?: run {
         println("No connected accessories with ADB found.")
         return null
@@ -80,6 +105,7 @@ private fun UsbInterop.deviceInAccessoryModeOrNull(): Peripheral? {
         return selectedPeripheral
     }
     setupAccessoryMode(selectedPeripheral)
+    sleep(1.seconds.inWholeSeconds.toUInt())
     selectedPeripheral.getUsbConfigType().let {
         if(it.contains("accessory")) {
             println("Device successfully switched to Accessory Mode.")
@@ -108,16 +134,21 @@ fun installAccessoryAppOrThrow() {
 
 fun run() {
     installAccessoryAppOrThrow()
-    val usb = UsbInterop()
-    val peripheral = usb.deviceInAccessoryModeOrNull()
-        ?: throw IllegalStateException("No device in Accessory Mode available.")
-    usb.waitUntilAccessoryReady()
+    val usb = UsbInteropImpl()
+    usb.runSession {
+        val peripheral = deviceInAccessoryModeOrNull()
+            ?: throw IllegalStateException("No device in Accessory Mode available.")
+        waitUntilAccessoryReady()
 
-    startService()
-    usb.startStreamingFromPeripheral(peripheral)
+        startService()
+        startStreamingFromPeripheral(peripheral)
+    }
 }
 
 fun main(args: Array<String>) {
+    ensureSoxIsInstalledOrThrow()
+    ensureBlackholeIsInstalledOrThrow()
+
     if(args.isEmpty()) {
         help()
         return
@@ -129,7 +160,7 @@ fun main(args: Array<String>) {
         "start" -> startService()
         "stop" -> stop()
         "run" -> run()
-        "internal:list" -> UsbInterop().listAccessories()?.let { println(it) }
+        "internal:list" -> UsbInteropImpl().runSession { listAccessories()?.let { println(it) } }
         else -> println("Unknown command: $command").also { help() }
     }
 }

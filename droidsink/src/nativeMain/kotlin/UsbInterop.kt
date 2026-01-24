@@ -4,6 +4,7 @@ import kotlinx.cinterop.*
 import libusb.*
 import platform.posix.*
 import cnames.structs.*
+import kotlin.collections.plusAssign
 
 const val ACCESSORY_PID: UShort = 0x2D00u
 const val ACCESSORY_ADB_PID: UShort = 0x2D01u
@@ -39,27 +40,69 @@ data class Peripheral(
     val vendorId: VendorId,
     val productId: ProductId
 )
+data class UsbPhysicalId(
+    val bus: Int,
+    val portPath: List<Int>
+)
 
-private fun <T> withContext(block: MemScope.(CPointer<libusb_context>) -> T): T =
-    memScoped {
-        val ctxPtr = alloc<CPointerVar<libusb_context>>()
-        libusb_init(ctxPtr.ptr)
-        val ctx = ctxPtr.value!!
-        try {
-            block(ctx)
-        } finally {
-            libusb_exit(ctx)
-        }
+
+
+interface UsbSession {
+    fun listAccessories(): List<Peripheral>
+    fun setupAccessoryMode(peripheral: Peripheral)
+    fun getAccessoryInfo(peripheral: Peripheral): Peripheral?
+    fun waitUntilAccessoryReady(
+        expectedVendor: Int = GOOGLE_VID,
+        expectedProducts: Set<Int> = AOA_PIDS,
+        timeoutSeconds: Int = 30
+    )
+    fun startStreamingFromPeripheral(peripheral: Peripheral)
+}
+
+interface UsbInterop {
+    fun runSession(block: UsbSession.() -> Unit)
+}
+
+
+private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : UsbSession {
+
+    override fun listAccessories(): List<Peripheral> = memScoped {
+        listAccessoriesInternal()
     }
 
-class UsbInterop {
+    override fun setupAccessoryMode(peripheral: Peripheral) = memScoped {
+        setupAccessoryModeInternal(peripheral.vendorId.toUShort(), peripheral.productId.toUShort())
+    }
 
-    data class UsbPhysicalId(
-        val bus: Int,
-        val portPath: List<Int>
-    )
+    override fun waitUntilAccessoryReady(expectedVendor: Int, expectedProducts: Set<Int>, timeoutSeconds: Int) = memScoped {
+        waitUntilAccessoryReadyInternal(expectedVendor, expectedProducts, timeoutSeconds)
+    }
 
-    private fun getPhysicalId(device: CPointer<libusb_device>): UsbPhysicalId {
+    override fun startStreamingFromPeripheral(peripheral: Peripheral) = memScoped {
+        startStreamingFromPeripheralInternal(peripheral)
+    }
+
+    override fun getAccessoryInfo(peripheral: Peripheral): Peripheral? = memScoped {
+        getAccessoryInfoInternal(peripheral.vendorId.toUShort(), peripheral.productId.toUShort())
+    }
+
+
+    companion object {
+        val SAMPLE_RATE = 48000
+        val CHANNELS = 2
+        val BYTES_PER_SAMPLE = 2
+        val FRAMES_PER_CHUNK = 960          // 20 ms
+        val USB_READ_BUFFER_SIZE =
+            FRAMES_PER_CHUNK * CHANNELS * BYTES_PER_SAMPLE // 3840 bytes
+        val AUDIO_READ_BUFFER_SIZE = 128
+
+        val AOA_INTERFACE = 0
+        val AOA_ENDPOINT_OUT: UByte = 0x01u
+
+        val AUDIO_DEVICE_NAME = "BlackHole 2ch"
+    }
+
+    private fun MemScope.getPhysicalId(device: CPointer<libusb_device>): UsbPhysicalId {
         val bus = libusb_get_bus_number(device).toInt()
 
         val ports = UByteArray(8)
@@ -71,11 +114,11 @@ class UsbInterop {
         )
     }
 
-    fun listAccessories(): List<Peripheral> = withContext { ctx ->
+    private fun MemScope.listAccessoriesInternal(): List<Peripheral> {
         val list = mutableListOf<Peripheral>()
         val devicesPtr = alloc<CPointerVar<CPointerVar<libusb_device>>>()
         val count = libusb_get_device_list(ctx, devicesPtr.ptr)
-        val devices = devicesPtr.value ?: return@withContext emptyList()
+        val devices = devicesPtr.value ?: return emptyList()
 
         for (i in 0 until count.toInt()) {
             val dev = devices[i] ?: continue
@@ -96,32 +139,27 @@ class UsbInterop {
         }
 
         libusb_free_device_list(devices, 1)
-        list
+        return list
     }
 
-    fun setupAccessoryMode(peripheral: Peripheral) =
-        setupAccessoryMode(peripheral.vendorId.toUShort(), peripheral.productId.toUShort())
 
-    fun getAccessoryInfo(peripheral: Peripheral): Peripheral? =
-        getAccessoryInfo(peripheral.vendorId.toUShort(), peripheral.productId.toUShort())
 
-    private fun sendString(handle: CPointer<libusb_device_handle>?, index: Int, string: String) = memScoped {
-    val data = string.cstr
-    libusb_control_transfer(
-        handle,
-        (LIBUSB_ENDPOINT_OUT or LIBUSB_REQUEST_TYPE_VENDOR).toUByte(),
-        52.toUByte(),
-        0.toUShort(),
-        index.toUShort(),
-        data.ptr.reinterpret(),
-        (string.length + 1).toUShort(),
-        0.toUint()
-    )
-}
-    private fun setupAccessoryMode(vendorId: UShort, productId: UShort) = withContext { ctx ->
-
+    private fun MemScope.sendString(handle: CPointer<libusb_device_handle>?, index: Int, string: String) {
+        val data = string.cstr
+        libusb_control_transfer(
+            handle,
+            (LIBUSB_ENDPOINT_OUT or LIBUSB_REQUEST_TYPE_VENDOR).toUByte(),
+            52.toUByte(),
+            0.toUShort(),
+            index.toUShort(),
+            data.ptr.reinterpret(),
+            (string.length + 1).toUShort(),
+            0.toUint()
+        )
+    }
+    private fun MemScope.setupAccessoryModeInternal(vendorId: UShort, productId: UShort) {
         val handle = libusb_open_device_with_vid_pid(ctx, vendorId, productId)
-            ?: return@withContext
+            ?: return
 
         libusb_set_auto_detach_kernel_driver(handle, 1)
 
@@ -160,6 +198,8 @@ class UsbInterop {
 
         libusb_close(handle)
 
+        sleep(2u)
+
         physicalId?.let {
             waitUntilPeripheralReenumerates(
                 ctx,
@@ -170,9 +210,9 @@ class UsbInterop {
         }
     }
 
-    private fun getAccessoryInfo(vendorId: UShort, productId: UShort) = withContext<Peripheral?> { ctx ->
+    private fun MemScope.getAccessoryInfoInternal(vendorId: UShort, productId: UShort): Peripheral? {
         val handle = libusb_open_device_with_vid_pid(ctx, vendorId, productId)
-            ?: return@withContext null
+            ?: return null
 
         val desc = alloc<libusb_device_descriptor>()
         libusb_get_device_descriptor(libusb_get_device(handle), desc.ptr)
@@ -185,9 +225,9 @@ class UsbInterop {
         )
 
         libusb_close(handle)
-        info
+        return info
     }
-    private fun waitUntilPeripheralReenumerates(
+    private fun MemScope.waitUntilPeripheralReenumerates(
         ctx: CPointer<libusb_context>?,
         original: UsbPhysicalId,
         expectedVendor: Int,
@@ -233,82 +273,98 @@ class UsbInterop {
         }
     }
 
-    fun waitUntilAccessoryReady(
+    private fun findPeripheralBySerialNumber(
+        serialNumber: String
+    ): Peripheral? {
+        val accessories = listAccessories()
+        return accessories.firstOrNull { it.serialNumber == serialNumber }
+    }
+
+    private fun MemScope.startStreamingFromPeripheralInternal(peripheral: Peripheral) {
+
+        val newPeripheralInfo = findPeripheralBySerialNumber(peripheral.serialNumber)
+            ?: error("Peripheral with serial number ${peripheral.serialNumber} not found.")
+
+        val handle = libusb_open_device_with_vid_pid(
+            ctx,
+            newPeripheralInfo.vendorId.toUShort(),
+            newPeripheralInfo.productId.toUShort()
+        ) ?: error("Failed to open device ${peripheral.name} for streaming.")
+
+        libusb_set_auto_detach_kernel_driver(handle, 1)
+
+        startStreaming(handle)
+
+        libusb_close(handle)
+    }
+
+    private fun MemScope.waitUntilAccessoryReadyInternal(
         expectedVendor: Int = GOOGLE_VID,
         expectedProducts: Set<Int> = AOA_PIDS,
         timeoutSeconds: Int = 30
     ) {
-        withContext { ctx ->
-            val start = time(null)
+        val start = time(null)
 
-            while (true) {
-                if (timeoutSeconds > 0 && time(null) - start > timeoutSeconds) {
-                    error("Timeout waiting for accessory to be ready")
-                }
-
-                val devicesPtr = alloc<CPointerVar<CPointerVar<libusb_device>>>()
-                val count = libusb_get_device_list(ctx, devicesPtr.ptr)
-                val devices = devicesPtr.value ?: continue
-
-                for (i in 0 until count.toInt()) {
-                    val dev = devices[i] ?: continue
-
-                    val desc = alloc<libusb_device_descriptor>()
-                    if (libusb_get_device_descriptor(dev, desc.ptr) != 0) continue
-
-                    if (desc.idVendor.toInt() != expectedVendor) continue
-                    if (!expectedProducts.contains(desc.idProduct.toInt())) continue
-
-                    val handlePtr = alloc<CPointerVar<libusb_device_handle>>()
-                    if (libusb_open(dev, handlePtr.ptr) != 0) continue
-
-                    val handle = handlePtr.value ?: continue
-                    libusb_set_auto_detach_kernel_driver(handle, 1)
-
-                    if (libusb_claim_interface(handle, 0) == 0) {
-                        libusb_release_interface(handle, 0)
-                        libusb_close(handle)
-                        libusb_free_device_list(devices, 1)
-
-                        println("Accessory ready for streaming.")
-                        return@withContext
-                    }
-
-                    libusb_close(handle)
-                }
-
-                libusb_free_device_list(devices, 1)
-                sleep(1u)
+        while (true) {
+            if (timeoutSeconds > 0 && time(null) - start > timeoutSeconds) {
+                error("Timeout waiting for accessory to be ready")
             }
+
+            val devicesPtr = alloc<CPointerVar<CPointerVar<libusb_device>>>()
+            val count = libusb_get_device_list(ctx, devicesPtr.ptr)
+            val devices = devicesPtr.value ?: continue
+
+            for (i in 0 until count.toInt()) {
+                val dev = devices[i] ?: continue
+
+                val desc = alloc<libusb_device_descriptor>()
+                if (libusb_get_device_descriptor(dev, desc.ptr) != 0) continue
+
+                if (desc.idVendor.toInt() != expectedVendor) continue
+                if (!expectedProducts.contains(desc.idProduct.toInt())) continue
+
+                val handlePtr = alloc<CPointerVar<libusb_device_handle>>()
+                if (libusb_open(dev, handlePtr.ptr) != 0) continue
+
+                val handle = handlePtr.value ?: continue
+                libusb_set_auto_detach_kernel_driver(handle, 1)
+
+                if (libusb_claim_interface(handle, 0) == 0) {
+                    libusb_release_interface(handle, 0)
+                    libusb_close(handle)
+                    libusb_free_device_list(devices, 1)
+
+                    println("Accessory ready for streaming.")
+                    return
+                }
+
+                libusb_close(handle)
+            }
+
+            libusb_free_device_list(devices, 1)
+            sleep(1u)
         }
     }
 
-    fun startStreamingFromPeripheral(peripheral: Peripheral) {
-        withContext { ctx ->
 
-            val handle = libusb_open_device_with_vid_pid(
-                ctx,
-                peripheral.vendorId.toUShort(),
-                peripheral.productId.toUShort()
-            ) ?: error("Failed to open device ${peripheral.name} for streaming.")
-
-            libusb_set_auto_detach_kernel_driver(handle, 1)
-
-            startStreaming(handle)
-
-            libusb_close(handle)
+    private fun MemScope.startStreamFromStdin(buffer: CArrayPointer<UByteVar>): Int {
+        var total = 0
+        while (total < USB_READ_BUFFER_SIZE) {
+            val r = read(
+                STDIN_FILENO,
+                buffer + total,
+                (USB_READ_BUFFER_SIZE - total).convert()
+            )
+            if (r <= 0) break
+            total += r.toInt()
         }
+        return total
     }
-    private fun startStreaming(handle: CPointer<libusb_device_handle>) = memScoped {
-        val AOA_INTERFACE = 0
-        val AOA_ENDPOINT_OUT: UByte = 0x01u
 
-        val SAMPLE_RATE = 48000
-        val CHANNELS = 2
-        val BYTES_PER_SAMPLE = 2
-        val FRAMES_PER_CHUNK = 960          // 20 ms
-        val BUFFER_SIZE =
-            FRAMES_PER_CHUNK * CHANNELS * BYTES_PER_SAMPLE // 3840 bytes
+    private fun MemScope.startStreaming(
+        handle: CPointer<libusb_device_handle>,
+        readFromStream: (CArrayPointer<UByteVar>) -> Int
+    ) {
 
         libusb_set_auto_detach_kernel_driver(handle, 1)
 
@@ -317,33 +373,24 @@ class UsbInterop {
             error("libusb_claim_interface failed: ${libusb_error_name(claim)}")
         }
 
-        println("Streaming is active (using buffer with ${BUFFER_SIZE} bytes)...")
+        println("Streaming is active (using buffer with ${USB_READ_BUFFER_SIZE} bytes)...")
 
-        val buffer = allocArray<UByteVar>(BUFFER_SIZE)
+        val buffer = allocArray<UByteVar>(USB_READ_BUFFER_SIZE)
         val transferred = alloc<IntVar>()
 
         while (true) {
 
-            var total = 0
-            while (total < BUFFER_SIZE) {
-                val r = read(
-                    STDIN_FILENO,
-                    buffer + total,
-                    (BUFFER_SIZE - total).convert()
-                )
-                if (r <= 0) break
-                total += r.toInt()
-            }
+            val total = readFromStream(buffer)
 
-            if (total != BUFFER_SIZE) continue
+            if (total != USB_READ_BUFFER_SIZE) continue
 
             val r = libusb_bulk_transfer(
                 handle,
                 AOA_ENDPOINT_OUT,
                 buffer,
-                BUFFER_SIZE,
+                USB_READ_BUFFER_SIZE,
                 transferred.ptr,
-                0.toUint()
+                1000.toUint()
             )
 
             if (r != 0) {
@@ -354,7 +401,37 @@ class UsbInterop {
 
         libusb_release_interface(handle, AOA_INTERFACE)
     }
+    private fun startSoxRawInput(): CPointer<FILE> {
+        val cmd = """
+        sox --buffer $AUDIO_READ_BUFFER_SIZE \
+            -t coreaudio "$AUDIO_DEVICE_NAME" \
+            -r $SAMPLE_RATE -c $CHANNELS -b 16 -e signed-integer -L \
+            -t raw - 2>/dev/null
+    """.trimIndent()
 
+        val pipe = popen(cmd, "r")
+            ?: error("Failed to start sox")
+
+        return pipe
+    }
+    private fun MemScope.startStreaming(handle: CPointer<libusb_device_handle>) {
+        val sox = startSoxRawInput()
+
+        startStreaming(handle) { buffer ->
+            var total = 0
+            while (total < USB_READ_BUFFER_SIZE) {
+                val r = fread(
+                    buffer + total,
+                    1.convert(),
+                    (USB_READ_BUFFER_SIZE - total).convert(),
+                    sox
+                )
+                if (r <= 0UL) break
+                total += r.toInt()
+            }
+            total
+        }
+    }
 
     private fun MemScope.readString(handle: CPointer<libusb_device_handle>?, index: UByte): String {
         if (handle == null || index == 0.toUByte()) return "Unknown"
@@ -363,6 +440,20 @@ class UsbInterop {
         return if (r > 0) buffer.reinterpret<ByteVar>().toKString() else "Unknown"
     }
     private fun Int.toUint() = this.toUInt()
-    private fun Int.toUlong() = this.toULong()
 }
 
+class UsbInteropImpl: UsbInterop {
+
+    override fun runSession(block: UsbSession.() -> Unit) = memScoped {
+        val ctxPtr = alloc<CPointerVar<libusb_context>>()
+        if (libusb_init(ctxPtr.ptr) != 0) error("Fatal error using LibUsb")
+        val ctx = ctxPtr.value!!
+
+        try {
+            val session = UsbSessionInternal(ctx)
+            session.block()
+        } finally {
+            libusb_exit(ctx)
+        }
+    }
+}
