@@ -1,1 +1,0 @@
-clang aoa.c $(pkg-config --cflags --libs libusb-1.0) -o aoa
