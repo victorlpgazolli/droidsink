@@ -1,12 +1,12 @@
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlinx.cinterop.*
 import platform.posix.*
+import kotlin.time.Duration.Companion.seconds
 
+const val APK_PATH = "/tmp/droidsink.apk"
 @OptIn(ExperimentalForeignApi::class)
 fun exec(cmd: String): String = memScoped {
-    val pipe = popen(cmd, "r") ?: error("popen failed")
+    val silentCmd = "$cmd 2>/dev/null"
+    val pipe = popen(silentCmd, "r") ?: error("popen failed")
 
     val buffer = ByteArray(4096)
     val output = StringBuilder()
@@ -26,22 +26,95 @@ fun greet() {
 
 fun help(){
     println("Available commands:")
-    println("  greet    - Print a greeting message")
+    println("  install         - Install the accessory app on the connected device.")
+    println("  start           - Start the accessory service on the connected device.")
+    println("  stop            - Stop the accessory service on the connected device.")
+    println("  run             - Install the app, start the service, and begin streaming data.")
+    println("  internal:list   - List connected USB accessories.")
 }
 
-fun start() {
-    println("Starting the service...")
-}
 fun stop() {
     println("Stopping the service...")
+    exec("adb shell am force-stop dev.victorlpgazolli.mobilesink")
 }
 fun install() {
-    println("Installing the service...")
-    exec("adb install -r droidsink.apk")
-    println(exec("adb devices"))
+    println("Installing the app...")
+    exec("adb install -r -t $APK_PATH")
 }
+
+fun isAppInstalled(): Boolean {
+    val output = exec("adb shell pm list packages dev.victorlpgazolli.mobilesink")
+    return output.contains("dev.victorlpgazolli.mobilesink")
+}
+
+fun Peripheral.getUsbConfigType(): List<String> {
+    val configurations = exec("adb -s $serialNumber shell getprop sys.usb.config")
+        .split(",")
+        .map { config -> config.trim() }
+    return configurations
+}
+
+fun Peripheral.hasAdb(): Boolean {
+    val hasAnySerialNumber = serialNumber != "Unknown"
+    if(!hasAnySerialNumber) return false
+
+    val hasAdb = getUsbConfigType()
+        .firstOrNull { config -> config == "adb" }
+
+    return hasAdb != null
+}
+fun startService() {
+    println("Starting foreground service on device...")
+    exec("adb shell am start-foreground-service -n dev.victorlpgazolli.mobilesink/.AccessoryService")
+}
+
+private fun UsbInterop.deviceInAccessoryModeOrNull(): Peripheral? {
+    val selectedPeripheral = listAccessories().firstOrNull { it.hasAdb() } ?: run {
+        println("No connected accessories with ADB found.")
+        return null
+    }
+    println("Selected Peripheral: ${selectedPeripheral.name} (VID: ${selectedPeripheral.vendorId}, PID: ${selectedPeripheral.productId}, Serial: ${selectedPeripheral.serialNumber}), configType: ${selectedPeripheral.getUsbConfigType()}")
+    val configType = selectedPeripheral.getUsbConfigType()
+    if(configType.contains("accessory")) {
+        println("Device is already in Accessory Mode.")
+        return selectedPeripheral
+    }
+    setupAccessoryMode(selectedPeripheral)
+    selectedPeripheral.getUsbConfigType().let {
+        if(it.contains("accessory")) {
+            println("Device successfully switched to Accessory Mode.")
+            return selectedPeripheral
+        } else {
+            println("Failed to switch device to Accessory Mode.")
+            return null
+        }
+    }
+}
+
+fun installAccessoryAppOrThrow() {
+    if(isAppInstalled()) {
+        println("Accessory app is already installed.")
+        return
+    }
+    println("Installing accessory app...")
+    install()
+    sleep(2.seconds.inWholeSeconds.toUInt())
+    val installed = isAppInstalled()
+    if(!installed) {
+        throw IllegalStateException("Failed to install the accessory app.")
+    }
+}
+
+
 fun run() {
-    println("Running the service...")
+    installAccessoryAppOrThrow()
+    val usb = UsbInterop()
+    val peripheral = usb.deviceInAccessoryModeOrNull()
+        ?: throw IllegalStateException("No device in Accessory Mode available.")
+    usb.waitUntilAccessoryReady()
+
+    startService()
+    usb.startStreamingFromPeripheral(peripheral)
 }
 
 fun main(args: Array<String>) {
@@ -52,10 +125,11 @@ fun main(args: Array<String>) {
     val (command) = args
 
     when(command) {
-        "install" -> install()
-        "start" -> start()
+        "install" -> installAccessoryAppOrThrow()
+        "start" -> startService()
         "stop" -> stop()
         "run" -> run()
+        "internal:list" -> UsbInterop().listAccessories()?.let { println(it) }
         else -> println("Unknown command: $command").also { help() }
     }
 }
