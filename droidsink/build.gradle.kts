@@ -46,6 +46,22 @@ kotlin {
         binaries {
             executable {
                 entryPoint = "main"
+                if (hostOs == "Mac OS X") {
+                    freeCompilerArgs += listOf(
+                        "-linker-options", "-macosx_version_min 15.0",
+                        "-linker-options", "-framework IOKit",
+                        "-linker-options", "-framework CoreFoundation",
+                        "-linker-options", "-framework Security"
+                    )
+                }
+            }
+        }
+        compilations.getByName("main") {
+            val libusb by cinterops.creating {
+                definitionFile.set(project.file("src/nativeInterop/cinterop/libusb.def"))
+                if (hostOs == "Mac OS X") {
+                    includeDirs("/opt/homebrew/include")
+                }
             }
         }
     }

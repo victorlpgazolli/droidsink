@@ -9,7 +9,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="AudioBridge"
+        android:label="DroidSink"
         android:theme="@android:style/Theme.NoDisplay"> <activity
         android:name=".MainActivity"
         android:exported="true">

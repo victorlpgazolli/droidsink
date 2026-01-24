@@ -22,7 +22,7 @@ int main() {
         printf("Handshake AOA...\n");
         unsigned char proto[2];
         libusb_control_transfer(h, LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR, 51, 0, 0, proto, 2, 0);
-        send_string(h, 0, "Victor"); send_string(h, 1, "AudioBridge");
+        send_string(h, 0, "Victor"); send_string(h, 1, "DroidSink");
         send_string(h, 2, "PCM Audio"); send_string(h, 3, "1.0");
         send_string(h, 4, "http://localhost"); send_string(h, 5, "0001");
         libusb_control_transfer(h, LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR, 53, 0, 0, NULL, 0, 0);

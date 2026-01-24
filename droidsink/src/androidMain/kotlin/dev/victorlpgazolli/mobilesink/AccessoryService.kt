@@ -35,9 +35,12 @@ class AccessoryService : Service() {
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (ACTION_USB_PERMISSION == intent.action) {
-                val accessory: UsbAccessory? = intent.getParcelableExtra(UsbManager.EXTRA_ACCESSORY)
+                val accessory =
+                    intent.getParcelableExtra<UsbAccessory>(UsbManager.EXTRA_ACCESSORY)
+                        ?: usbManager?.accessoryList?.firstOrNull()
+                        ?: return
                 if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                    startPlayback(accessory ?: return)
+                    startPlayback(accessory)
                 }
             }
         }
@@ -57,15 +60,26 @@ class AccessoryService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
-        val accessory = intent?.getParcelableExtra<UsbAccessory>(UsbManager.EXTRA_ACCESSORY)
-            ?: usbManager?.accessoryList?.firstOrNull()
+        val accessory =
+            intent?.getParcelableExtra<UsbAccessory>(UsbManager.EXTRA_ACCESSORY)
+                ?: usbManager?.accessoryList?.firstOrNull()
+                ?: return START_NOT_STICKY
 
-        accessory?.let {
-            if (usbManager?.hasPermission(it) == true) startPlayback(it)
-            else {
-                val pi = PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_IMMUTABLE)
-                usbManager?.requestPermission(it, pi)
+        if (usbManager?.hasPermission(accessory) == true) {
+            startPlayback(accessory)
+        } else {
+            val permissionIntent = Intent(ACTION_USB_PERMISSION).apply {
+                setPackage(packageName)
             }
+
+            val pi = PendingIntent.getBroadcast(
+                this,
+                0,
+                permissionIntent,
+                PendingIntent.FLAG_IMMUTABLE
+            )
+
+            usbManager?.requestPermission(accessory, pi)
         }
         return START_STICKY
     }
@@ -124,8 +138,11 @@ class AccessoryService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "Erro no streaming: ${e.message}")
             } finally {
+                audioTrack.stop()
                 audioTrack.release()
-                playbackThread?.interrupt()
+                fileDescriptor?.close()
+                fileDescriptor = null
+                playbackThread = null
             }
         }
         playbackThread?.start()
@@ -144,6 +161,9 @@ class AccessoryService : Service() {
 
     override fun onDestroy() {
         playbackThread?.interrupt()
+        playbackThread = null
+        fileDescriptor?.close()
+        fileDescriptor = null
         super.onDestroy()
     }
 

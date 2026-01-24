@@ -2,6 +2,6 @@
 <resources>
     <usb-accessory
         manufacturer="Victor"
-        model="AudioBridge"
+        model="DroidSink"
         version="1.0" />
 </resources>
