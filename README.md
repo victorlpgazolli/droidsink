@@ -4,7 +4,7 @@ DroidSink is an audio streaming tool built with [Kotlin Multiplatform](https://k
 
 The project is designed to **capture audio from a virtual device** on the computer and **stream it directly to a connected Android peripheral**. Currently, it supports macOS as the host platform, with plans to extend support to Windows and Linux in the future.
 
-I have configured the project to have a [latency of around 100ms-120ms](https://github.com/victorlpgazolli/droidsink/blob/master/droidsink/src/commonMain/kotlin/constants.kt) depending on the system performance.
+I have configured the project to have a [latency of around 100ms-200ms](https://github.com/victorlpgazolli/droidsink/blob/master/droidsink/src/commonMain/kotlin/constants.kt) depending on the system performance.
 
 The project consists of two parts:
 
