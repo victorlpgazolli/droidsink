@@ -22,10 +22,6 @@ fun exec(cmd: String): String = memScoped {
     output.toString()
 }
 
-fun greet() {
-    println("Hello from Kotlin/Native!")
-}
-
 fun help(){
     println("Available commands:")
     println("  install         - Install the accessory app on the connected device.")

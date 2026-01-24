@@ -1,5 +1,10 @@
 package dev.victorlpgazolli.mobilesink
 
+import ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR
+import BITS_PER_SAMPLE
+import CHANNELS
+import FRAMES_PER_CHUNK
+import SAMPLE_RATE
 import android.app.*
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -90,18 +95,16 @@ class AccessoryService : Service() {
         fileDescriptor = usbManager?.openAccessory(accessory) ?: return
 
         playbackThread = Thread {
-            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
-            val sampleRate = 48000
-            val frameBytes = 4 // stereo 16-bit
-            val framesPerChunk = 960 // 20ms
-            val chunkSize = framesPerChunk * frameBytes // 3840
+            setThreadPriority(THREAD_PRIORITY_URGENT_AUDIO)
+            val frameBytes = (BITS_PER_SAMPLE / 8) * CHANNELS // stereo 16-bit
+            val chunkSize = FRAMES_PER_CHUNK * frameBytes // 3840
             val minBufferSize = AudioTrack.getMinBufferSize(
-                sampleRate,
+                SAMPLE_RATE,
                 AudioFormat.CHANNEL_OUT_STEREO,
                 AudioFormat.ENCODING_PCM_16BIT
             )
 
-            val bufferSizeInBytes = maxOf(minBufferSize, chunkSize * 4)
+            val bufferSizeInBytes = maxOf(minBufferSize, chunkSize * ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR)
 
             val audioTrack = AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder()
@@ -110,7 +113,7 @@ class AccessoryService : Service() {
                     .build())
                 .setAudioFormat(AudioFormat.Builder()
                     .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(sampleRate)
+                    .setSampleRate(SAMPLE_RATE)
                     .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                     .build())
                 .setTransferMode(AudioTrack.MODE_STREAM)

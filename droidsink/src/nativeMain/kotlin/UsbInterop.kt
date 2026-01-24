@@ -88,17 +88,11 @@ private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : Us
 
 
     companion object {
-        val SAMPLE_RATE = 48000
-        val CHANNELS = 2
-        val BYTES_PER_SAMPLE = 2
-        val FRAMES_PER_CHUNK = 960          // 20 ms
         val USB_READ_BUFFER_SIZE =
             FRAMES_PER_CHUNK * CHANNELS * BYTES_PER_SAMPLE // 3840 bytes
-        val AUDIO_READ_BUFFER_SIZE = 128
-
+        val AUDIO_READ_BUFFER_SIZE = AUDIO_READ_BUFFER_CAPACITY_FACTOR * 128
         val AOA_INTERFACE = 0
         val AOA_ENDPOINT_OUT: UByte = 0x01u
-
         val AUDIO_DEVICE_NAME = "BlackHole 2ch"
     }
 
@@ -373,7 +367,7 @@ private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : Us
             error("libusb_claim_interface failed: ${libusb_error_name(claim)}")
         }
 
-        println("Streaming is active (using buffer with ${USB_READ_BUFFER_SIZE} bytes)...")
+        println("Streaming is active (using buffer with $USB_READ_BUFFER_SIZE bytes)...")
 
         val buffer = allocArray<UByteVar>(USB_READ_BUFFER_SIZE)
         val transferred = alloc<IntVar>()
@@ -405,7 +399,7 @@ private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : Us
         val cmd = """
         sox --buffer $AUDIO_READ_BUFFER_SIZE \
             -t coreaudio "$AUDIO_DEVICE_NAME" \
-            -r $SAMPLE_RATE -c $CHANNELS -b 16 -e signed-integer -L \
+            -r $SAMPLE_RATE -c $CHANNELS -b $BITS_PER_SAMPLE -e signed-integer -L \
             -t raw - 2>/dev/null
     """.trimIndent()
 
@@ -426,7 +420,11 @@ private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : Us
                     (USB_READ_BUFFER_SIZE - total).convert(),
                     sox
                 )
-                if (r <= 0UL) break
+                if (r <= 0UL) {
+                    if (feof(sox) != 0) break
+                    if (ferror(sox) != 0) break
+                    continue
+                }
                 total += r.toInt()
             }
             total
