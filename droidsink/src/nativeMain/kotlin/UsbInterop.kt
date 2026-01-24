@@ -88,8 +88,7 @@ private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : Us
 
 
     companion object {
-        val USB_READ_BUFFER_SIZE =
-            FRAMES_PER_CHUNK * CHANNELS * BYTES_PER_SAMPLE // 3840 bytes
+
         val AUDIO_READ_BUFFER_SIZE = AUDIO_READ_BUFFER_CAPACITY_FACTOR * 128
         val AOA_INTERFACE = 0
         val AOA_ENDPOINT_OUT: UByte = 0x01u
