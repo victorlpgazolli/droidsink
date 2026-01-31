@@ -1,0 +1,36 @@
+name: Release DroidSink Assets
+on:
+  release:
+    types: [created]
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: brew install libusb
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+
+      - name: Build APK and macOS Binary
+        run: ./gradlew :droidsink:assembleRelease :droidsink:nativeBinaries
+
+      - name: Upload Artifacts to Release
+        run: |
+          gh release upload ${{ github.event.release.tag_name }} \
+            droidsink/build/outputs/apk/release/droidsink-release-unsigned.apk \
+            droidsink/build/bin/native/releaseExecutable/droidsink.kexe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
