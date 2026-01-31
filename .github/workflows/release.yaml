@@ -13,16 +13,11 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      - name: Install dependencies
-        run: brew install libusb
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: 1
 
       - name: Build APK and macOS Binary
         run: ./gradlew :droidsink:assembleRelease :droidsink:nativeBinaries
