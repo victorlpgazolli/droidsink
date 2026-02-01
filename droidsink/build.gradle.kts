@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.io.FileInputStream
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -86,8 +88,25 @@ android {
         }
     }
     buildTypes {
+        signingConfigs {
+            create("release") {
+                val keystorePropertiesFile = rootProject.file("keystore.properties")
+                val keystoreProperties = Properties()
+                if (keystorePropertiesFile.exists()) {
+                    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+                } else {
+                    throw GradleException("keystore.properties file not found for release signing configuration.")
+                }
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+
+            }
+        }
         getByName("release") {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

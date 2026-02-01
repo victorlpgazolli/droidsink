@@ -4,7 +4,6 @@ import kotlinx.cinterop.*
 import platform.posix.*
 import kotlin.time.Duration.Companion.seconds
 
-const val APK_PATH = "/tmp/droidsink.apk"
 @OptIn(ExperimentalForeignApi::class)
 fun exec(cmd: String): String = memScoped {
     val silentCmd = "$cmd 2>/dev/null"
@@ -36,8 +35,21 @@ fun stop() {
     exec("adb shell am force-stop dev.victorlpgazolli.mobilesink")
 }
 fun install() {
+    val configPath = "~/.config/droidsink"
+
+    exec("mkdir -p $configPath")
+
+    val apkPath = "$configPath/$APP_VERSION.apk"
+
+    val fileExists = exec("test -f $apkPath && echo exists").trim() == "exists"
+    if(fileExists.not()) {
+        println("Downloading APK from $APP_URL to $apkPath")
+        exec("wget $APP_URL -O $apkPath --show-progress --progress=bar:force:noscroll")
+    }
+
     println("Installing the app...")
-    exec("adb install -r -t $APK_PATH")
+
+    exec("adb install -r -t $apkPath")
 }
 
 fun isAppInstalled(): Boolean {
@@ -154,9 +166,11 @@ fun main(args: Array<String>) {
     when(command) {
         "install" -> installAccessoryAppOrThrow()
         "start" -> startService()
+        "version" -> println(APP_VERSION)
         "stop" -> stop()
         "run" -> run()
         "internal:list" -> UsbInteropImpl().runSession { listAccessories()?.let { println(it) } }
+        "internal:install" -> install()
         else -> println("Unknown command: $command").also { help() }
     }
 }

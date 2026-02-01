@@ -32,3 +32,7 @@ const val ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR = 3
 // [Android] AudioTrack buffer: ~60ms
 
 // total = ~100ms of audio latency from PC to Android playback
+
+
+const val APP_VERSION = "1.0.0-alpha-2"
+const val APP_URL = "https://github.com/victorlpgazolli/droidsink/releases/download/$APP_VERSION/droidsink-release.apk"
