@@ -25,7 +25,7 @@ jobs:
       - name: Upload Artifacts to Release
         run: |
           gh release upload ${{ github.event.release.tag_name }} \
-            droidsink/build/outputs/apk/release/droidsink-release-unsigned.apk \
+            droidsink/build/outputs/apk/release/droidsink-release.apk \
             droidsink/build/bin/native/releaseExecutable/droidsink.kexe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
