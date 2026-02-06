@@ -14,8 +14,25 @@ The project consists of two parts:
 
 ## Features
 - pipe audio from virtual audio devices to Android devices over USB.
+- pipe microphone audio from Android devices to the computer over USB.
 - currently macOS only. aims to be cross-platform.
 - only 1 device at a time for now.
+
+```bash
+
+Available commands:
+  install            - Install the accessory app on the connected device.
+  start              - Start the accessory service on the connected device.
+  stop               - Stop the accessory service on the connected device.
+  run                - (alias to run:as:speaker) Install the app, start the service, and begin streaming data.
+  run:as:speaker     - Run the service streaming audio from PC to Android
+  run:as:microphone  - Run the service streaming audio from Android to PC.
+  internal:list      - List connected USB accessories.
+  version            - Print the current version of the app.
+
+Available parameters:
+  --skip-app-install - Skip the app installation step when running 'run' or 'start' commands.
+```
 
 ## Prerequisites
 To run DroidSink, your system must have the following software installed:
