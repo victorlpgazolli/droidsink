@@ -5,9 +5,12 @@ import platform.posix.*
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalForeignApi::class)
-fun exec(cmd: String): String = memScoped {
+fun exec(cmd: String, suppressLogs: Boolean = true): String = memScoped {
     val silentCmd = "$cmd 2>/dev/null"
-    val pipe = popen(silentCmd, "r") ?: error("popen failed")
+    val pipe = popen(
+        if(suppressLogs) silentCmd else cmd,
+        "r"
+    ) ?: error("popen failed")
 
     val buffer = ByteArray(4096)
     val output = StringBuilder()
@@ -30,13 +33,16 @@ fun help(){
     println("  run:as:speaker  - Run the service streaming audio from PC to Android")
     println("  run:as:microphone - Run the service streaming audio from Android to PC.")
     println("  internal:list   - List connected USB accessories.")
+    println("  version         - Print the current version of the app.")
+    println("Available parameters:")
+    println("  --skip-app-install - Skip the app installation step when running 'run' or 'start' commands.")
 }
 
-fun stop() {
+fun CommandSession.stop() {
     println("Stopping the service...")
     exec("adb shell am force-stop dev.victorlpgazolli.mobilesink")
 }
-fun install() {
+fun Peripheral?.installApp() {
     val configPath = "~/.config/droidsink"
 
     exec("mkdir -p $configPath")
@@ -51,7 +57,11 @@ fun install() {
 
     println("Installing the app...")
 
-    exec("adb install -r -t $apkPath")
+    val customOption = this?.serialNumber?.let { serial ->
+        "-s $serial"
+    } ?: ""
+
+    exec("adb $customOption install -r -t $apkPath", suppressLogs = this != null)
 }
 
 fun isAppInstalled(): Boolean {
@@ -75,7 +85,7 @@ fun Peripheral.hasAdb(): Boolean {
 
     return hasAdb != null
 }
-fun startService() {
+fun CommandSession.startService() {
     println("Starting foreground service on device...")
     exec("adb shell am start-foreground-service -n dev.victorlpgazolli.mobilesink/.AccessoryService")
 }
@@ -104,9 +114,19 @@ fun ensureBlackholeIsInstalledOrThrow() {
 }
 
 private fun UsbSession.deviceInAccessoryModeOrNull(): Peripheral? {
-    val selectedPeripheral = listAccessories().firstOrNull { it.hasAdb() } ?: run {
+    val selectedPeripherals = listAccessories().filter { it.hasAdb() }
+
+
+    if (selectedPeripherals.isEmpty()) {
         println("No connected accessories with ADB found.")
         return null
+    }
+    val selectedPeripheral = selectedPeripherals.firstOrNull() ?: run {
+        println("No connected accessories with ADB found.")
+        return null
+    }
+    if (selectedPeripherals.size > 1) {
+        println("Multiple connected accessories with ADB found. Selecting the first one: ${selectedPeripheral.name}")
     }
     println("Selected Peripheral: ${selectedPeripheral.name} (VID: ${selectedPeripheral.vendorId}, PID: ${selectedPeripheral.productId}, Serial: ${selectedPeripheral.serialNumber}), configType: ${selectedPeripheral.getUsbConfigType()}")
     val configType = selectedPeripheral.getUsbConfigType()
@@ -127,13 +147,13 @@ private fun UsbSession.deviceInAccessoryModeOrNull(): Peripheral? {
     }
 }
 
-fun installAccessoryAppOrThrow() {
+fun CommandSession.installAccessoryAppOrThrow(peripheral: Peripheral? = null) {
     if(isAppInstalled()) {
         println("Accessory app is already installed.")
         return
     }
     println("Installing accessory app...")
-    install()
+    peripheral.installApp()
     sleep(2.seconds.inWholeSeconds.toUInt())
     val installed = isAppInstalled()
     if(!installed) {
@@ -142,18 +162,28 @@ fun installAccessoryAppOrThrow() {
 }
 
 
-fun run(type: StreamingType = StreamingType.HostToClient) {
-    installAccessoryAppOrThrow()
+fun CommandSession.run(type: StreamingType = StreamingType.HostToClient) {
+
     val usb = UsbInteropImpl()
     usb.runSession {
         val peripheral = deviceInAccessoryModeOrNull()
             ?: throw IllegalStateException("No device in Accessory Mode available.")
+
+        if (hasSkipAppInstallParameter) {
+            println("Skipping app installation")
+        } else {
+            installAccessoryAppOrThrow(peripheral)
+        }
         waitUntilAccessoryReady()
 
         startService()
         startStreamingFromPeripheral(peripheral, type)
     }
 }
+
+data class CommandSession(
+    val hasSkipAppInstallParameter: Boolean
+)
 
 fun main(args: Array<String>) {
     ensureSoxIsInstalledOrThrow()
@@ -164,17 +194,20 @@ fun main(args: Array<String>) {
         return
     }
     val (command) = args
+    val hasSkipAppInstallParameter = args.contains("--skip-app-install")
+    val session = CommandSession(
+        hasSkipAppInstallParameter = hasSkipAppInstallParameter
+    )
 
     when(command) {
-        "install" -> installAccessoryAppOrThrow()
-        "start" -> startService()
+        "install" -> session.installAccessoryAppOrThrow()
+        "start" -> session.startService()
         "version" -> println(APP_VERSION)
-        "stop" -> stop()
-        "run" -> run()
-        "run:as:speaker" -> run()
-        "run:as:microphone" -> run(StreamingType.ClientToHost)
+        "stop" -> session.stop()
+        "run" -> session.run()
+        "run:as:speaker" -> session.run()
+        "run:as:microphone" -> session.run(StreamingType.ClientToHost)
         "internal:list" -> UsbInteropImpl().runSession { listAccessories()?.let { println(it) } }
-        "internal:install" -> install()
         else -> println("Unknown command: $command").also { help() }
     }
 }
