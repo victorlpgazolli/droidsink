@@ -1,11 +1,15 @@
 package dev.victorlpgazolli.mobilesink
 
+import android.Manifest.permission.RECORD_AUDIO
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.usb.UsbAccessory
 import android.hardware.usb.UsbManager
 import android.os.Bundle
 import android.util.Log
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -13,6 +17,7 @@ class MainActivity : Activity() {
 
         val accessory = intent.getParcelableExtra<UsbAccessory>(UsbManager.EXTRA_ACCESSORY)
 
+        checkMicPermission()
         if (accessory != null) {
             Log.d("AOA_Audio", "Activity iniciada pelo USB: ${accessory.model}")
             startBridgeService(accessory)
@@ -31,6 +36,14 @@ class MainActivity : Activity() {
         finish()
     }
 
+    fun checkMicPermission() {
+        if (ContextCompat.checkSelfPermission(this, RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+
+            // Isso exibirá o diálogo do sistema
+            ActivityCompat.requestPermissions(this, arrayOf(RECORD_AUDIO), 101)
+        }
+    }
     private fun startBridgeService(accessory: UsbAccessory) {
         val serviceIntent = Intent(this, AccessoryService::class.java)
         serviceIntent.putExtra(UsbManager.EXTRA_ACCESSORY, accessory)

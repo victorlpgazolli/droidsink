@@ -1,10 +1,17 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
+import UsbSessionInternal.Companion.AOA_ENDPOINT_IN
+import UsbSessionInternal.Companion.AOA_ENDPOINT_OUT
+import UsbSessionInternal.Companion.AOA_INTERFACE
+import UsbSessionInternal.Companion.AUDIO_DEVICE_NAME
+import UsbSessionInternal.Companion.AUDIO_READ_BUFFER_SIZE
 import kotlinx.cinterop.*
 import libusb.*
 import platform.posix.*
 import cnames.structs.*
 import kotlin.collections.plusAssign
+import kotlin.concurrent.AtomicInt
+import kotlin.native.concurrent.*
 
 const val ACCESSORY_PID: UShort = 0x2D00u
 const val ACCESSORY_ADB_PID: UShort = 0x2D01u
@@ -92,6 +99,7 @@ private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : Us
         val AUDIO_READ_BUFFER_SIZE = AUDIO_READ_BUFFER_CAPACITY_FACTOR * 128
         val AOA_INTERFACE = 0
         val AOA_ENDPOINT_OUT: UByte = 0x01u
+        val AOA_ENDPOINT_IN: UByte = 0x81u
         val AUDIO_DEVICE_NAME = "BlackHole 2ch"
     }
 
@@ -286,9 +294,43 @@ private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : Us
 
         libusb_set_auto_detach_kernel_driver(handle, 1)
 
-        startStreaming(handle)
+        val claim = libusb_claim_interface(handle, AOA_INTERFACE)
+        if (claim != 0) {
+            error("libusb_claim_interface failed: ${libusb_error_name(claim)}")
+        }
 
+        startUsbThreads(handle)
+
+        while (sessionActive.value == 1) {
+            usleep(100000.toUInt())
+        }
+
+        println("Stopping USB streaming...")
+        libusb_release_interface(handle, AOA_INTERFACE) // Libera a interface 0
         libusb_close(handle)
+    }
+    fun startUsbThreads(handle: CPointer<libusb_device_handle>) {
+        val inputWorker = Worker.start()
+        val outputWorker = Worker.start()
+
+        inputWorker.execute(TransferMode.SAFE, { handle.toLong() }) { handlePtr ->
+            val handle = handlePtr.toCPointer<libusb_device_handle>()
+            memScoped {
+                handle?.let {
+                    startStreamingFromClient(handle)
+                }
+            }
+
+            }
+
+        outputWorker.execute(TransferMode.SAFE, { handle.toLong() }) { handlePtr ->
+            val handle = handlePtr.toCPointer<libusb_device_handle>()
+            memScoped {
+                handle?.let {
+                    startStreamingFromHost(handle)
+                }
+            }
+        }
     }
 
     private fun MemScope.waitUntilAccessoryReadyInternal(
@@ -342,92 +384,16 @@ private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : Us
 
     private fun MemScope.startStreamFromStdin(buffer: CArrayPointer<UByteVar>): Int {
         var total = 0
-        while (total < USB_READ_BUFFER_SIZE) {
+        while (total < USB_WRITE_BUFFER_SIZE) {
             val r = read(
                 STDIN_FILENO,
                 buffer + total,
-                (USB_READ_BUFFER_SIZE - total).convert()
+                (USB_WRITE_BUFFER_SIZE - total).convert()
             )
             if (r <= 0) break
             total += r.toInt()
         }
         return total
-    }
-
-    private fun MemScope.startStreaming(
-        handle: CPointer<libusb_device_handle>,
-        readFromStream: (CArrayPointer<UByteVar>) -> Int
-    ) {
-
-        libusb_set_auto_detach_kernel_driver(handle, 1)
-
-        val claim = libusb_claim_interface(handle, AOA_INTERFACE)
-        if (claim != 0) {
-            error("libusb_claim_interface failed: ${libusb_error_name(claim)}")
-        }
-
-        println("Streaming is active (using buffer with $USB_READ_BUFFER_SIZE bytes)...")
-
-        val buffer = allocArray<UByteVar>(USB_READ_BUFFER_SIZE)
-        val transferred = alloc<IntVar>()
-
-        while (true) {
-
-            val total = readFromStream(buffer)
-
-            if (total != USB_READ_BUFFER_SIZE) continue
-
-            val r = libusb_bulk_transfer(
-                handle,
-                AOA_ENDPOINT_OUT,
-                buffer,
-                USB_READ_BUFFER_SIZE,
-                transferred.ptr,
-                1000.toUint()
-            )
-
-            if (r != 0) {
-                fprintf(stderr, "USB error: %s\n", libusb_error_name(r))
-                break
-            }
-        }
-
-        libusb_release_interface(handle, AOA_INTERFACE)
-    }
-    private fun startSoxRawInput(): CPointer<FILE> {
-        val cmd = """
-        sox --buffer $AUDIO_READ_BUFFER_SIZE \
-            -t coreaudio "$AUDIO_DEVICE_NAME" \
-            -r $SAMPLE_RATE -c $CHANNELS -b $BITS_PER_SAMPLE -e signed-integer -L \
-            -t raw - 2>/dev/null
-    """.trimIndent()
-
-        val pipe = popen(cmd, "r")
-            ?: error("Failed to start sox")
-
-        return pipe
-    }
-    private fun MemScope.startStreaming(handle: CPointer<libusb_device_handle>) {
-        val sox = startSoxRawInput()
-
-        startStreaming(handle) { buffer ->
-            var total = 0
-            while (total < USB_READ_BUFFER_SIZE) {
-                val r = fread(
-                    buffer + total,
-                    1.convert(),
-                    (USB_READ_BUFFER_SIZE - total).convert(),
-                    sox
-                )
-                if (r <= 0UL) {
-                    if (feof(sox) != 0) break
-                    if (ferror(sox) != 0) break
-                    continue
-                }
-                total += r.toInt()
-            }
-            total
-        }
     }
 
     private fun MemScope.readString(handle: CPointer<libusb_device_handle>?, index: UByte): String {
@@ -452,5 +418,125 @@ class UsbInteropImpl: UsbInterop {
         } finally {
             libusb_exit(ctx)
         }
+    }
+}
+
+
+val sessionActive: AtomicInt = AtomicInt(1)
+private fun MemScope.startStreaming(
+    handle: CPointer<libusb_device_handle>,
+    id: String,
+    bufferSize: Int,
+    accessoryEndpoint: UByte,
+    shouldKeepInflatingBuffer: ((CArrayPointer<UByteVar>) -> Boolean)? = null,
+    onTransferred: ((Pair<CArrayPointer<UByteVar>, Int>) -> Unit)? = null,
+) {
+
+    println("[$id] Streaming is active (using buffer with $bufferSize bytes)...")
+
+    val buffer = allocArray<UByteVar>(bufferSize)
+    val transferred = alloc<IntVar>()
+
+    while (true) {
+
+        if(shouldKeepInflatingBuffer?.invoke(buffer)?.not() == true) continue
+
+        val transfer = libusb_bulk_transfer(
+            handle,
+            accessoryEndpoint,
+            buffer,
+            bufferSize,
+            transferred.ptr,
+            1000.toUInt()
+        )
+
+        if (transfer == 0) {
+            onTransferred?.invoke(
+                Pair(buffer, transferred.value)
+            )
+        } else {
+            fprintf(stderr, "[$id] USB error: %s\n", libusb_error_name(transfer))
+            break
+        }
+    }
+    sessionActive.value = 0
+}
+
+
+private fun MemScope.startStreamingFromHost(handle: CPointer<libusb_device_handle>) {
+    val bufferSize = USB_WRITE_BUFFER_SIZE
+    val sox = startSoxRawInput(bufferSize)
+
+    fun readFromStream(buffer: CPointer<UByteVar>): Int {
+        var total = 0
+        while (total < bufferSize) {
+            val r = fread(
+                buffer + total,
+                1.convert(),
+                (bufferSize - total).convert(),
+                sox
+            )
+            if (r <= 0UL) {
+                if (feof(sox) != 0) break
+                if (ferror(sox) != 0) break
+                continue
+            }
+            total += r.toInt()
+        }
+        return total
+    }
+
+    startStreaming(
+        handle = handle,
+        id = "Host->Client",
+        bufferSize = bufferSize,
+        accessoryEndpoint = AOA_ENDPOINT_OUT,
+        shouldKeepInflatingBuffer = {
+            val total = readFromStream(it)
+            total != bufferSize
+        }
+    )
+}
+private fun startSoxRawInput(bufferSize: Int): CPointer<FILE> {
+    val cmd = """
+        sox --buffer $bufferSize \
+            -t coreaudio "$AUDIO_DEVICE_NAME" \
+            -r $SAMPLE_RATE -c $CHANNELS -b $BITS_PER_SAMPLE -e signed-integer -L \
+            -t raw - 2>/dev/null
+    """.trimIndent()
+
+    val pipe = popen(cmd, "r")
+        ?: error("Failed to start sox")
+
+    return pipe
+}
+private fun startSoxRawOutput(): CPointer<FILE> {
+    val cmd = """
+        sox -t raw -r $SAMPLE_RATE -c $CHANNELS -b $BITS_PER_SAMPLE -e signed-integer -L - \
+        -t coreaudio "$AUDIO_DEVICE_NAME" 2>/dev/null
+    """.trimIndent()
+
+    val pipe = popen(cmd, "w") ?: error("Failed to start sox for playback")
+    return pipe
+}
+private var soxOutputPipe: CPointer<FILE>? = null
+
+private fun MemScope.startStreamingFromClient(handle: CPointer<libusb_device_handle>) {
+    startStreaming(
+        handle = handle,
+        id = "Client->Host",
+        bufferSize = USB_READ_BUFFER_SIZE,
+        accessoryEndpoint = AOA_ENDPOINT_IN,
+    ) { (buffer, length) ->
+        if (soxOutputPipe == null) {
+            soxOutputPipe = startSoxRawOutput()
+        }
+        val written = fwrite(buffer, 1.convert(), length.convert(), soxOutputPipe)
+
+        if (written.toInt() < length) {
+            fprintf(stderr, "Error sending data to sox playback\n")
+        }
+
+        fflush(soxOutputPipe)
     }
 }

@@ -19,8 +19,10 @@ const val AUDIO_READ_BUFFER_CAPACITY_FACTOR = 15
 // USB data transfer buffer size in bytes
 // current: 3840 bytes
 // 3840 / 192 = 20ms of buffered audio
-val USB_READ_BUFFER_SIZE =
+val USB_WRITE_BUFFER_SIZE =
     FRAMES_PER_CHUNK * CHANNELS * BYTES_PER_SAMPLE
+
+val USB_READ_BUFFER_SIZE = 16384 // max size recommended from AOA
 
 // capacity factor to Android AudioTrack buffer
 // 3 * 20ms = 60ms of buffered audio
@@ -36,3 +38,5 @@ const val ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR = 3
 
 const val APP_VERSION = "1.0.0-alpha-2"
 const val APP_URL = "https://github.com/victorlpgazolli/droidsink/releases/download/$APP_VERSION/droidsink-release.apk"
+
+const val LOG_TAG = "DroidSink"

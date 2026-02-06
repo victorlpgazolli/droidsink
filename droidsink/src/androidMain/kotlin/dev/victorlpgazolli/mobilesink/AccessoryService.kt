@@ -1,33 +1,26 @@
 package dev.victorlpgazolli.mobilesink
 
-import ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR
-import BITS_PER_SAMPLE
-import CHANNELS
-import FRAMES_PER_CHUNK
-import SAMPLE_RATE
+import LOG_TAG
+import android.Manifest.permission.RECORD_AUDIO
 import android.app.*
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.hardware.usb.UsbAccessory
 import android.hardware.usb.UsbManager
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioManager
-import android.media.AudioTrack
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
-import android.os.Process.*
 import android.util.Log
-import android.util.Log.e
-import java.io.FileInputStream
+import androidx.core.app.ActivityCompat
+import androidx.core.app.ActivityCompat.requestPermissions
+import androidx.core.content.ContextCompat
 
 class AccessoryService : Service() {
 
     companion object {
-        private const val TAG = "AOA_Audio"
         private const val ACTION_USB_PERMISSION = "dev.victorlpgazolli.mobilesink.USB_PERMISSION"
         private const val CHANNEL_ID = "aoa_audio_channel"
         private const val NOTIFICATION_ID = 1
@@ -35,7 +28,9 @@ class AccessoryService : Service() {
 
     private var usbManager: UsbManager? = null
     private var fileDescriptor: ParcelFileDescriptor? = null
-    private var playbackThread: Thread? = null
+
+    private val audioOutputService = AudioOutputService()
+    private val audioInputService = AudioInputService()
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -55,6 +50,7 @@ class AccessoryService : Service() {
         super.onCreate()
         usbManager = getSystemService(USB_SERVICE) as UsbManager
         val intentFilter = IntentFilter("dev.victorlpgazolli.mobilesink.USB_PERMISSION")
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(usbReceiver, intentFilter, RECEIVER_NOT_EXPORTED)
         } else {
@@ -90,65 +86,13 @@ class AccessoryService : Service() {
     }
 
     private fun startPlayback(accessory: UsbAccessory) {
-        if (playbackThread != null) return
-
+        Log.i(LOG_TAG, "Starting playback for accessory: ${accessory.model}")
         fileDescriptor = usbManager?.openAccessory(accessory) ?: return
-
-        playbackThread = Thread {
-            setThreadPriority(THREAD_PRIORITY_URGENT_AUDIO)
-            val frameBytes = (BITS_PER_SAMPLE / 8) * CHANNELS // stereo 16-bit
-            val chunkSize = FRAMES_PER_CHUNK * frameBytes // 3840
-            val minBufferSize = AudioTrack.getMinBufferSize(
-                SAMPLE_RATE,
-                AudioFormat.CHANNEL_OUT_STEREO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-
-            val bufferSizeInBytes = maxOf(minBufferSize, chunkSize * ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR)
-
-            val audioTrack = AudioTrack.Builder()
-                .setAudioAttributes(AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build())
-                .setAudioFormat(AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(SAMPLE_RATE)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
-                    .build())
-                .setTransferMode(AudioTrack.MODE_STREAM)
-                .setBufferSizeInBytes(bufferSizeInBytes)
-                .build()
-
-
-            val inputStream = FileInputStream(fileDescriptor!!.fileDescriptor)
-            val tempBuffer = ByteArray(chunkSize)
-            try {
-                audioTrack.play()
-
-                while (!Thread.interrupted()) {
-                    var total = 0
-                    while (total < chunkSize) {
-                        val r = inputStream.read(tempBuffer, total, chunkSize - total)
-                        if (r <= 0) break
-                        total += r
-                    }
-
-                    if (total == chunkSize) {
-                        audioTrack.write(tempBuffer, 0, total)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Erro no streaming: ${e.message}")
-            } finally {
-                audioTrack.stop()
-                audioTrack.release()
-                fileDescriptor?.close()
-                fileDescriptor = null
-                playbackThread = null
-            }
+        Log.i(LOG_TAG, "File descriptor obtained: ${fileDescriptor?.fileDescriptor}")
+        fileDescriptor?.let {
+            audioOutputService.startRecording(it)
+            audioInputService.startRecording(it)
         }
-        playbackThread?.start()
     }
 
     private fun createNotificationChannel() {
@@ -163,10 +107,10 @@ class AccessoryService : Service() {
         .setContentTitle("Audio Bridge").setSmallIcon(android.R.drawable.ic_media_play).setOngoing(true).build()
 
     override fun onDestroy() {
-        playbackThread?.interrupt()
-        playbackThread = null
         fileDescriptor?.close()
         fileDescriptor = null
+        audioOutputService.stopRecording()
+        audioInputService.stopRecording()
         super.onDestroy()
     }
 
