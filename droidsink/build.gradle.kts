@@ -41,6 +41,7 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.kotlin.stdlib)
+            implementation(libs.androidx.core.ktx)
         }
     }
 

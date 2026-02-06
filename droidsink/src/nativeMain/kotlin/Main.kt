@@ -26,7 +26,9 @@ fun help(){
     println("  install         - Install the accessory app on the connected device.")
     println("  start           - Start the accessory service on the connected device.")
     println("  stop            - Stop the accessory service on the connected device.")
-    println("  run             - Install the app, start the service, and begin streaming data.")
+    println("  run             - (alias to run:as:speaker) Install the app, start the service, and begin streaming data.")
+    println("  run:as:speaker  - Run the service streaming audio from PC to Android")
+    println("  run:as:microphone - Run the service streaming audio from Android to PC.")
     println("  internal:list   - List connected USB accessories.")
 }
 
@@ -140,7 +142,7 @@ fun installAccessoryAppOrThrow() {
 }
 
 
-fun run() {
+fun run(type: StreamingType = StreamingType.HostToClient) {
     installAccessoryAppOrThrow()
     val usb = UsbInteropImpl()
     usb.runSession {
@@ -149,7 +151,7 @@ fun run() {
         waitUntilAccessoryReady()
 
         startService()
-        startStreamingFromPeripheral(peripheral)
+        startStreamingFromPeripheral(peripheral, type)
     }
 }
 
@@ -169,6 +171,8 @@ fun main(args: Array<String>) {
         "version" -> println(APP_VERSION)
         "stop" -> stop()
         "run" -> run()
+        "run:as:speaker" -> run()
+        "run:as:microphone" -> run(StreamingType.ClientToHost)
         "internal:list" -> UsbInteropImpl().runSession { listAccessories()?.let { println(it) } }
         "internal:install" -> install()
         else -> println("Unknown command: $command").also { help() }
