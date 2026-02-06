@@ -22,7 +22,7 @@ const val AUDIO_READ_BUFFER_CAPACITY_FACTOR = 15
 val USB_WRITE_BUFFER_SIZE =
     FRAMES_PER_CHUNK * CHANNELS * BYTES_PER_SAMPLE
 
-val USB_READ_BUFFER_SIZE = 16384 // max size recommended from AOA
+val USB_READ_BUFFER_SIZE = 16384 / 4
 
 // capacity factor to Android AudioTrack buffer
 // 3 * 20ms = 60ms of buffered audio

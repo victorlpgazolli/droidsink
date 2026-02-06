@@ -63,7 +63,11 @@ interface UsbSession {
         expectedProducts: Set<Int> = AOA_PIDS,
         timeoutSeconds: Int = 30
     )
-    fun startStreamingFromPeripheral(peripheral: Peripheral)
+    fun startStreamingFromPeripheral(peripheral: Peripheral, type: StreamingType)
+}
+sealed class StreamingType {
+    object ClientToHost : StreamingType() // microphone data from Android to PC
+    object HostToClient : StreamingType() // audio playback data from PC to Android
 }
 
 interface UsbInterop {
@@ -85,8 +89,8 @@ private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : Us
         waitUntilAccessoryReadyInternal(expectedVendor, expectedProducts, timeoutSeconds)
     }
 
-    override fun startStreamingFromPeripheral(peripheral: Peripheral) = memScoped {
-        startStreamingFromPeripheralInternal(peripheral)
+    override fun startStreamingFromPeripheral(peripheral: Peripheral, type: StreamingType) = memScoped {
+        startStreamingFromPeripheralInternal(peripheral, type)
     }
 
     override fun getAccessoryInfo(peripheral: Peripheral): Peripheral? = memScoped {
@@ -281,7 +285,7 @@ private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : Us
         return accessories.firstOrNull { it.serialNumber == serialNumber }
     }
 
-    private fun MemScope.startStreamingFromPeripheralInternal(peripheral: Peripheral) {
+    private fun MemScope.startStreamingFromPeripheralInternal(peripheral: Peripheral, type: StreamingType) {
 
         val newPeripheralInfo = findPeripheralBySerialNumber(peripheral.serialNumber)
             ?: error("Peripheral with serial number ${peripheral.serialNumber} not found.")
@@ -299,39 +303,36 @@ private class UsbSessionInternal(private val ctx: CPointer<libusb_context>) : Us
             error("libusb_claim_interface failed: ${libusb_error_name(claim)}")
         }
 
-        startUsbThreads(handle)
+        startUsbThreads(handle, type)
 
         while (sessionActive.value == 1) {
-            usleep(100000.toUInt())
+            val result = libusb_handle_events(ctx)
+            if (result != 0) {
+                fprintf(stderr, "Event handler error: %s\n", libusb_error_name(result))
+                break
+            }
         }
 
         println("Stopping USB streaming...")
         libusb_release_interface(handle, AOA_INTERFACE) // Libera a interface 0
         libusb_close(handle)
     }
-    fun startUsbThreads(handle: CPointer<libusb_device_handle>) {
-        val inputWorker = Worker.start()
-        val outputWorker = Worker.start()
-
-        inputWorker.execute(TransferMode.SAFE, { handle.toLong() }) { handlePtr ->
-            val handle = handlePtr.toCPointer<libusb_device_handle>()
-            memScoped {
-                handle?.let {
-                    startStreamingFromClient(handle)
-                }
-            }
-
-            }
-
-        outputWorker.execute(TransferMode.SAFE, { handle.toLong() }) { handlePtr ->
-            val handle = handlePtr.toCPointer<libusb_device_handle>()
-            memScoped {
-                handle?.let {
-                    startStreamingFromHost(handle)
+    fun startUsbThreads(
+        handle: CPointer<libusb_device_handle>,
+        type: StreamingType
+    ) = withWorker {
+            execute(TransferMode.SAFE, { Pair(handle.toLong(), type) }) { (handlePtr, type) ->
+                val handle = handlePtr.toCPointer<libusb_device_handle>()
+                memScoped {
+                    handle?.let {
+                        when(type) {
+                            is StreamingType.ClientToHost -> startStreamingAsyncFromClient(handle)
+                            is StreamingType.HostToClient -> startStreamingAsyncFromHost(handle)
+                        }
+                    }
                 }
             }
         }
-    }
 
     private fun MemScope.waitUntilAccessoryReadyInternal(
         expectedVendor: Int = GOOGLE_VID,
@@ -439,7 +440,7 @@ private fun MemScope.startStreaming(
 
     while (true) {
 
-        if(shouldKeepInflatingBuffer?.invoke(buffer)?.not() == true) continue
+        if(shouldKeepInflatingBuffer?.invoke(buffer) == true) continue
 
         val transfer = libusb_bulk_transfer(
             handle,
@@ -461,8 +462,102 @@ private fun MemScope.startStreaming(
     }
     sessionActive.value = 0
 }
+@OptIn(ExperimentalForeignApi::class)
+fun genericUsbCallback(transfer: CPointer<libusb_transfer>?) {
+    val t = transfer?.pointed ?: return
+    val context = t.user_data?.asStableRef<AsyncStreamContext>()?.get() ?: return
 
+    if (t.status == libusb_transfer_status.LIBUSB_TRANSFER_COMPLETED) {
+        val buffer = t.buffer!!.reinterpret<UByteVar>()
 
+        context.onTransferred?.invoke(Pair(buffer, t.actual_length))
+
+        context.shouldKeepInflatingBuffer?.invoke(buffer)
+
+        libusb_submit_transfer(transfer)
+    }
+}
+private fun MemScope.startStreamingAsyncFromClient(handle: CPointer<libusb_device_handle>) {
+    startStreamingAsync(
+        handle = handle,
+        id = "Client->Host",
+        bufferSize = USB_READ_BUFFER_SIZE,
+        accessoryEndpoint = AOA_ENDPOINT_IN,
+        onTransferred = { (buffer, length) ->
+            if (soxOutputPipe == null) {
+                soxOutputPipe = startSoxRawOutput()
+            }
+            val written = fwrite(buffer, 1.convert(), length.convert(), soxOutputPipe)
+            if (written.toInt() < length) {
+                fprintf(stderr, "Error sending data to sox playback\n")
+            }
+            fflush(soxOutputPipe)
+        }
+    )
+}
+private fun MemScope.startStreamingAsyncFromHost(handle: CPointer<libusb_device_handle>) {
+    val bufferSize = USB_WRITE_BUFFER_SIZE
+    val sox = startSoxRawInput(bufferSize)
+
+    startStreamingAsync(
+        handle = handle,
+        id = "Host->Client",
+        bufferSize = bufferSize,
+        accessoryEndpoint = UsbSessionInternal.AOA_ENDPOINT_OUT,
+        shouldKeepInflatingBuffer = { buffer ->
+            var total = 0
+            while (total < bufferSize) {
+                val r = fread(buffer + total, 1.convert(), (bufferSize - total).convert(), sox)
+                if (r <= 0UL) {
+                    if (feof(sox) != 0 || ferror(sox) != 0) break
+                    continue
+                }
+                total += r.toInt()
+            }
+            total == bufferSize
+        }
+    )
+}
+class AsyncStreamContext(
+    val id: String,
+    val endpoint: UByte,
+    val bufferSize: Int,
+    val onTransferred: ((Pair<CPointer<UByteVar>, Int>) -> Unit)?,
+    val shouldKeepInflatingBuffer: ((CPointer<UByteVar>) -> Boolean)?
+)
+private fun startStreamingAsync(
+    handle: CPointer<libusb_device_handle>,
+    id: String,
+    bufferSize: Int,
+    accessoryEndpoint: UByte,
+    numBuffers: Int = 1,
+    shouldKeepInflatingBuffer: ((CPointer<UByteVar>) -> Boolean)? = null,
+    onTransferred: ((Pair<CPointer<UByteVar>, Int>) -> Unit)? = null,
+) {
+    val context = AsyncStreamContext(id, accessoryEndpoint, bufferSize, onTransferred, shouldKeepInflatingBuffer)
+    val stableContext = StableRef.create(context)
+
+    repeat(numBuffers) {
+        val transfer = libusb_alloc_transfer(0)
+        val buffer = nativeHeap.allocArray<UByteVar>(bufferSize)
+
+        shouldKeepInflatingBuffer?.invoke(buffer)
+
+        libusb_fill_bulk_transfer(
+            transfer,
+            handle,
+            accessoryEndpoint,
+            buffer.reinterpret(),
+            bufferSize,
+            staticCFunction(::genericUsbCallback),
+            stableContext.asCPointer(),
+            1000u
+        )
+
+        libusb_submit_transfer(transfer)
+    }
+    println("[$id] Async streaming initialized with $numBuffers buffers of $bufferSize bytes.")
+}
 private fun MemScope.startStreamingFromHost(handle: CPointer<libusb_device_handle>) {
     val bufferSize = USB_WRITE_BUFFER_SIZE
     val sox = startSoxRawInput(bufferSize)
