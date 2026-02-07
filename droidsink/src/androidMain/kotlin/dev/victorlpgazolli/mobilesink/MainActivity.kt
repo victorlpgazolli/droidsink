@@ -40,7 +40,6 @@ class MainActivity : Activity() {
         if (ContextCompat.checkSelfPermission(this, RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
 
-            // Isso exibirá o diálogo do sistema
             ActivityCompat.requestPermissions(this, arrayOf(RECORD_AUDIO), 101)
         }
     }

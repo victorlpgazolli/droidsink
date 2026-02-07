@@ -42,8 +42,8 @@ class AudioOutputService : AudioSource {
         playbackThread = Thread {
             Log.i(LOG_TAG, "Starting audio output service with fd: ${fileDescriptor.fileDescriptor}")
             setThreadPriority(THREAD_PRIORITY_URGENT_AUDIO)
-            val frameBytes = (BITS_PER_SAMPLE / 8) * CHANNELS // stereo 16-bit
-            val chunkSize = FRAMES_PER_CHUNK * frameBytes // 3840
+            val frameBytes = (BITS_PER_SAMPLE / 8) * CHANNELS
+            val chunkSize = FRAMES_PER_CHUNK * frameBytes
             val minBufferSize = AudioTrack.getMinBufferSize(
                 SAMPLE_RATE,
                 AudioFormat.CHANNEL_OUT_STEREO,

@@ -163,7 +163,7 @@ internal class UsbSessionInternal(private val contextPointer: CPointer<libusb_co
         }
 
         println("Stopping USB streaming...")
-        libusb_release_interface(handle, AOA_INTERFACE) // Libera a interface 0
+        libusb_release_interface(handle, AOA_INTERFACE)
         libusb_close(handle)
     }
 
