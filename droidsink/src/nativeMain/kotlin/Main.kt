@@ -1,8 +1,11 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
 import kotlinx.cinterop.*
+import model.UsbSession
 import platform.posix.*
 import kotlin.time.Duration.Companion.seconds
+import model.peripheral.*
+import model.streaming.*
 
 @OptIn(ExperimentalForeignApi::class)
 fun exec(cmd: String, suppressLogs: Boolean = true): String = memScoped {
