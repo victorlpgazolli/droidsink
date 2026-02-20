@@ -13,14 +13,14 @@ import model.UsbSession
 class UsbInteropImpl: UsbInterop {
 
     @OptIn(ExperimentalForeignApi::class)
-    override fun runSession(block: UsbSession.() -> Unit) = memScoped {
+    override fun <T> runSession(block: UsbSession.() -> T): T = memScoped {
         val contextPointer = alloc<CPointerVar<libusb_context>>()
         if (libusb_init(contextPointer.ptr) != 0) error("Fatal error using LibUsb")
         val context = contextPointer.value!!
 
         try {
             val session = UsbSessionInternal(context)
-            session.block()
+            return@memScoped session.block()
         } finally {
             libusb_exit(context)
         }

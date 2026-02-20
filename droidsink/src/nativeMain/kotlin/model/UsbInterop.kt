@@ -1,5 +1,5 @@
 package model
 
 interface UsbInterop {
-    fun runSession(block: UsbSession.() -> Unit)
+    fun <T> runSession(block: UsbSession.() -> T): T
 }
