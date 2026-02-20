@@ -45,6 +45,8 @@ To run DroidSink, your system must have the following software installed:
     
 - [`adb`](https://formulae.brew.sh/cask/android-platform-tools): Required for initial device communication and app installation.
 
+- [`wget`](https://formulae.brew.sh/formula/wget): Used for downloading the latest APK from GitHub releases (optional if you use --skip-app-install)
+
 ### Android Device Requirements
 
 - [USB Debugging must be enabled.](https://developer.android.com/studio/debug/dev-options#debugging)

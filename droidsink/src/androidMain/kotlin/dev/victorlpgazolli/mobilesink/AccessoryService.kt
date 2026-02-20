@@ -8,14 +8,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.hardware.usb.UsbAccessory
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
-import androidx.core.app.ActivityCompat
-import androidx.core.app.ActivityCompat.requestPermissions
 import androidx.core.content.ContextCompat
 
 class AccessoryService : Service() {
@@ -60,14 +59,35 @@ class AccessoryService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
+        val canUseMic = ContextCompat.checkSelfPermission(this, RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+        var serviceType = 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            serviceType = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+
+            if (canUseMic) {
+                serviceType = serviceType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
+        }
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, buildNotification(), serviceType)
+            } else {
+                startForeground(NOTIFICATION_ID, buildNotification())
+            }
+        } catch (e: Exception) {
+            Log.e("AOA_Audio", "Falha crítica ao iniciar serviço: ${e.message}")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         val accessory =
             intent?.getParcelableExtra<UsbAccessory>(UsbManager.EXTRA_ACCESSORY)
                 ?: usbManager?.accessoryList?.firstOrNull()
                 ?: return START_NOT_STICKY
 
         if (usbManager?.hasPermission(accessory) == true) {
-            startPlayback(accessory)
+            startPlayback(accessory, canUseMic)
         } else {
             val permissionIntent = Intent(ACTION_USB_PERMISSION).apply {
                 setPackage(packageName)
@@ -84,14 +104,21 @@ class AccessoryService : Service() {
         }
         return START_STICKY
     }
-
     private fun startPlayback(accessory: UsbAccessory) {
+        val hasMicPermission = ContextCompat.checkSelfPermission(this, RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        startPlayback(accessory, hasMicPermission)
+    }
+    private fun startPlayback(accessory: UsbAccessory, canUseMic: Boolean) {
         Log.i(LOG_TAG, "Starting playback for accessory: ${accessory.model}")
         fileDescriptor = usbManager?.openAccessory(accessory) ?: return
         Log.i(LOG_TAG, "File descriptor obtained: ${fileDescriptor?.fileDescriptor}")
         fileDescriptor?.let {
             audioOutputService.startRecording(it)
-            audioInputService.startRecording(it)
+            if (canUseMic) {
+                audioInputService.startRecording(it)
+            } else {
+                Log.w(LOG_TAG, "Microphone permission not granted, audio input will be disabled")
+            }
         }
     }
 

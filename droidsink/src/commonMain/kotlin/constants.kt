@@ -40,3 +40,5 @@ const val APP_VERSION = "1.0.0"
 const val APP_URL = "https://github.com/victorlpgazolli/droidsink/releases/download/$APP_VERSION/droidsink-release.apk"
 
 const val LOG_TAG = "DroidSink"
+
+const val BUNDLE_ID = "dev.victorlpgazolli.mobilesink"
