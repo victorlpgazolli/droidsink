@@ -7,9 +7,9 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import platform.posix.FILE
 
 interface AudioStreamProvider {
-    operator fun invoke(): CPointer<FILE>
+    operator fun invoke(audioInterfaceName: String): CPointer<FILE>
 }
 
-fun AudioStreamProvider(start: () -> CPointer<FILE>): AudioStreamProvider = object : AudioStreamProvider {
-    override fun invoke(): CPointer<FILE> = start()
+fun AudioStreamProvider(start: (audioInterfaceName: String) -> CPointer<FILE>): AudioStreamProvider = object : AudioStreamProvider {
+    override fun invoke(audioInterfaceName: String): CPointer<FILE> = start(audioInterfaceName)
 }

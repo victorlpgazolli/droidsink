@@ -15,8 +15,8 @@ import soxAudioInputStreamProvider
 
 
 @OptIn(ExperimentalForeignApi::class)
-internal fun CPointer<libusb_device_handle>.startStreamingAsyncFromHost() {
-    val rawInputStream: CPointer<FILE> by lazy { soxAudioInputStreamProvider() }
+internal fun CPointer<libusb_device_handle>.startStreamingAsyncFromHost(audioInterfaceName: String) {
+    val rawInputStream: CPointer<FILE> by lazy { soxAudioInputStreamProvider(audioInterfaceName) }
 
     val bufferSize = USB_WRITE_BUFFER_SIZE
 

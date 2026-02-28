@@ -15,8 +15,8 @@ import platform.posix.fwrite
 import platform.posix.stderr
 import soxAudioOutputStreamProvider
 
-internal fun CPointer<libusb_device_handle>.startStreamingAsyncFromClient() {
-    val rawOutputStream: CPointer<FILE> by lazy { soxAudioOutputStreamProvider() }
+internal fun CPointer<libusb_device_handle>.startStreamingAsyncFromClient(audioInterfaceName: String) {
+    val rawOutputStream: CPointer<FILE> by lazy { soxAudioOutputStreamProvider(audioInterfaceName) }
 
     startStreamingAsyncInternal(
         id = "Client->Host",

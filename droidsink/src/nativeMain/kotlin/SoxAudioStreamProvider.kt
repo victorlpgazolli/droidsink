@@ -4,10 +4,10 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import platform.posix.popen
 import model.streaming.*
 
-val soxAudioInputStreamProvider = AudioStreamProvider {
+val soxAudioInputStreamProvider = AudioStreamProvider { audioInterfaceName ->
     val cmd = """
         sox --buffer $USB_WRITE_BUFFER_SIZE \
-            -t coreaudio "$AUDIO_DEVICE_NAME" \
+            -t coreaudio "$audioInterfaceName" \
             -r $SAMPLE_RATE -c $CHANNELS -b $BITS_PER_SAMPLE -e signed-integer -L \
             -t raw - 2>/dev/null
     """.trimIndent()
@@ -18,10 +18,10 @@ val soxAudioInputStreamProvider = AudioStreamProvider {
     pipe
 }
 
-val soxAudioOutputStreamProvider = AudioStreamProvider {
+val soxAudioOutputStreamProvider = AudioStreamProvider { audioInterfaceName ->
     val cmd = """
         sox -t raw -r $SAMPLE_RATE -c $CHANNELS -b $BITS_PER_SAMPLE -e signed-integer -L - \
-        -t coreaudio "$AUDIO_DEVICE_NAME" 2>/dev/null
+        -t coreaudio "$audioInterfaceName" 2>/dev/null
     """.trimIndent()
 
     val pipe = popen(cmd, "w")
