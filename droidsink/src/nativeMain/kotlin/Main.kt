@@ -73,7 +73,7 @@ fun Session.installApp() {
 
 fun Peripheral.stop() {
     println("Stopping the service...")
-    adb("adb shell am force-stop $BUNDLE_ID")
+    adb("shell am force-stop $BUNDLE_ID")
 }
 private fun Peripheral?.adb(parameters: String): String {
     val customOption = this?.serialNumber.let { serial ->
