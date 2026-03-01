@@ -20,8 +20,8 @@ fun CPointer<libusb_device_handle>.startStreaming(
         memScoped {
             handle?.let {
                 when(type) {
-                    is StreamingType.ClientToHost -> handle.startStreamingAsyncFromClient(type.audioInterface)
-                    is StreamingType.HostToClient -> handle.startStreamingAsyncFromHost(type.audioInterface)
+                    is StreamingType.ClientToHost -> handle.startStreamingAsyncFromClient(type.audioInterface, type.useFakeAudioInput)
+                    is StreamingType.HostToClient -> handle.startStreamingAsyncFromHost(type.audioInterface, type.useFakeAudioInput)
                 }
             }
         }

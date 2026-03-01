@@ -10,12 +10,12 @@ fun Array<String>.toSessionOrThrow(): Session {
     val hasSkipAppInstallParameter = contains(Parameter.SkipAppInstall.name)
     val runAsMicrophoneMode = contains(Parameter.MicrophoneMode.name)
     val hasCustomAudioDevice = contains(Parameter.AudioInterface.name)
+    val useFakeAudioInput = contains(Parameter.UseFakeAudioInput.name)
 
     val audioInterfaceName = if (hasCustomAudioDevice) {
         val index = indexOf(Parameter.AudioInterface.name)
-        println(this.joinToString(" "))
 
-        drop(index + 1).joinToString(" ").split("\"").first()
+        get(index + 1)
     } else {
         DEFAULT_AUDIO_DEVICE_NAME
     }
@@ -24,6 +24,7 @@ fun Array<String>.toSessionOrThrow(): Session {
         override val hasSkipAppInstallParameter: Boolean = hasSkipAppInstallParameter
         override val audioInterfaceName: String = audioInterfaceName
         override val runAsMicrophoneMode: Boolean = runAsMicrophoneMode
+        override val useFakeAudioInput: Boolean = useFakeAudioInput
     }
 }
 

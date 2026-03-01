@@ -15,7 +15,11 @@ import platform.posix.fwrite
 import platform.posix.stderr
 import soxAudioOutputStreamProvider
 
-internal fun CPointer<libusb_device_handle>.startStreamingAsyncFromClient(audioInterfaceName: String) {
+internal fun CPointer<libusb_device_handle>.startStreamingAsyncFromClient(audioInterfaceName: String, useFakeAudio: Boolean) {
+    if(useFakeAudio) {
+        fprintf(stderr, "Fake audio input is not supported when streaming from client, ignoring fake audio flag\n")
+    }
+
     val rawOutputStream: CPointer<FILE> by lazy { soxAudioOutputStreamProvider(audioInterfaceName) }
 
     startStreamingAsyncInternal(

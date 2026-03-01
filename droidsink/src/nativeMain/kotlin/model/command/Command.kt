@@ -15,20 +15,30 @@ val allCommands: List<Command> = listOf(
 
 public sealed class Parameter(
     val name: String,
-    val description: String
+    val description: String,
+    val defaultValue: String? = null,
 ) {
     object SkipAppInstall : Parameter(
         name = "--skip-app-install",
-        description = "Skip the installation of the .apk on the connected device (default: false)"
+        description = "Skip the installation of the .apk on the connected device.",
+        defaultValue = "false"
     )
     object AudioInterface : Parameter(
         name = "--audio-interface",
-        description = "Specify the name of the audio interface to use for streaming (default: $DEFAULT_AUDIO_DEVICE_NAME)"
+        description = "Specify the name of the audio interface to use for streaming.",
+        defaultValue = "\"$DEFAULT_AUDIO_DEVICE_NAME\""
     )
 
     object MicrophoneMode : Parameter(
         name = "--run-as-microphone",
-        description = "Run the application in microphone mode, which configures the device to provide audio data as if it were a microphone peripheral (default: false)"
+        description = "Run the application in microphone mode, which configures the device to provide audio data as if it were a microphone peripheral.",
+        defaultValue = "false"
+    )
+
+    object UseFakeAudioInput : Parameter(
+        name = "--use-fake-audio-input",
+        description = "Use a fake audio input stream that generates some audio data instead of reading from the host. This is useful for testing the application without needing to have an actual audio input device connected.",
+        defaultValue = "false"
     )
 
 }

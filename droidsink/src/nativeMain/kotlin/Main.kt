@@ -1,21 +1,27 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
-import kotlinx.cinterop.*
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.refTo
+import kotlinx.cinterop.toKString
 import model.UsbSession
 import model.command.Parameter
 import model.command.PrintableCommand
-import model.command.exceptions.AppNotInstalledException
 import model.command.Session
+import model.command.exceptions.AppNotInstalledException
 import model.command.exceptions.InvalidCommandException
-import model.command.runCatching
 import model.command.exceptions.NoDeviceWithAdbFoundException
 import model.command.getCommandOrThrow
+import model.command.runCatching
 import model.command.softwareRequirements.assertRequirements
 import model.command.toSessionOrThrow
-import platform.posix.*
+import model.peripheral.Peripheral
+import model.streaming.StreamingType
+import platform.posix.fgets
+import platform.posix.pclose
+import platform.posix.popen
+import platform.posix.sleep
 import kotlin.time.Duration.Companion.seconds
-import model.peripheral.*
-import model.streaming.*
 
 fun main(args: Array<String>) = runCatching {
     val session = args.toSessionOrThrow()
@@ -237,9 +243,15 @@ private fun Peripheral.purge() {
 
 private fun Session.run() {
     if (runAsMicrophoneMode) {
-        run(type = StreamingType.ClientToHost(audioInterfaceName))
+        run(type = StreamingType.ClientToHost(
+            audioInterface = audioInterfaceName,
+            useFakeAudioInput = useFakeAudioInput,
+        ))
     } else {
-        run(type = StreamingType.HostToClient(audioInterfaceName))
+        run(type = StreamingType.HostToClient(
+            audioInterface = audioInterfaceName,
+            useFakeAudioInput = useFakeAudioInput,
+        ))
     }
 }
 

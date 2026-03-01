@@ -1,8 +1,8 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import model.streaming.AudioStreamProvider
 import platform.posix.popen
-import model.streaming.*
 
 val soxAudioInputStreamProvider = AudioStreamProvider { audioInterfaceName ->
     val cmd = """
@@ -27,5 +27,13 @@ val soxAudioOutputStreamProvider = AudioStreamProvider { audioInterfaceName ->
     val pipe = popen(cmd, "w")
         ?: error("Failed to start sox for playback")
 
+    pipe
+}
+
+val soxDebugAudioStreamProvider = AudioStreamProvider {
+    val cmd = "sox -n -r $SAMPLE_RATE -c $CHANNELS -b $BITS_PER_SAMPLE -L -t raw - synth sine 440"
+
+    val pipe = popen(cmd, "r")
+        ?: error("Failed to start sox")
     pipe
 }
