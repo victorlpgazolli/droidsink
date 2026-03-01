@@ -4,7 +4,7 @@ on:
     types: [created]
 
 jobs:
-  build-and-release:
+  build-macos:
     runs-on: macos-latest
     permissions:
       contents: write
@@ -19,13 +19,53 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build APK and macOS Binary
+      - name: Build macOS Binary
+        run: ./gradlew :droidsink:nativeBinaries
+
+      - name: Upload macOS Binary
+        run: |
+          ARCH=$(uname -m)
+
+          SOURCE_BIN="droidsink/build/bin/native/releaseExecutable/droidsink.kexe"
+          TARGET_NAME="droidsink-macos-${ARCH}"
+          
+          cp "$SOURCE_BIN" "$TARGET_NAME"
+          gh release upload ${{ github.event.release.tag_name }} "$TARGET_NAME"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install Linux Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libusb-1.0-0-dev libc6-dev gcc-multilib
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK and Linux Binary
         run: ./gradlew :droidsink:assembleRelease :droidsink:nativeBinaries
 
-      - name: Upload Artifacts to Release
+      - name: Upload Linux and Android Artifacts
         run: |
+          ARCH=$(uname -m)
+          SOURCE_BIN="droidsink/build/bin/native/releaseExecutable/droidsink.kexe"
+          LINUX_TARGET="droidsink-linux-${ARCH}"
+          cp "$SOURCE_BIN" "$LINUX_TARGET"
+          
           gh release upload ${{ github.event.release.tag_name }} \
             droidsink/build/outputs/apk/release/droidsink-release.apk \
-            droidsink/build/bin/native/releaseExecutable/droidsink.kexe
+            "$LINUX_TARGET"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
