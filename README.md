@@ -49,11 +49,11 @@ To run DroidSink, your system must have the following software installed:
 
 - [`sox`](https://formulae.brew.sh/formula/sox): Required for audio processing and piping raw data.
 
-- [`BlackHole 2ch`](https://formulae.brew.sh/cask/blackhole-2ch): A virtual audio driver required to route system audio to DroidSink.
-    
 - [`adb`](https://formulae.brew.sh/cask/android-platform-tools): Required for initial device communication and app installation.
 
 - [`wget`](https://formulae.brew.sh/formula/wget): Used for downloading the latest APK from GitHub releases (optional if you use --skip-app-install)
+
+- Any virtual audio driver to route system audio to DroidSink, suggestion: [`BlackHole 2ch`](https://formulae.brew.sh/cask/blackhole-2ch).    
 
 ### Android Device Requirements
 
