@@ -75,6 +75,13 @@ This command installs the app, triggers Accessory Mode, and starts streaming:
 # will install the app if not already installed and start the foreground service 
 # will turn the device into Accessory Mode if needed
 # will start streaming audio from "BlackHole 2ch" to the device
+
+./droidsink run --skip-app-install --audio-interface "BlackHole 2ch"
+# will skip the app installation step and start streaming audio from "BlackHole 2ch" to the device
+
+./droidsink run --run-as-microphone
+# will install the app if not already installed and start the foreground service in microphone mode
+# will start streaming audio from the device's microphone to the computer
 ```
 
 ```bash
@@ -90,9 +97,14 @@ This command installs the app, triggers Accessory Mode, and starts streaming:
 # Stop the foreground service on the device.
 ```
 ```bash
-./droidsink internal:list
+./droidsink devices
 # List all connected USB devices with their details.
 ```
+```bash
+./droidsink purge
+# Uninstall the .apk from the connected device, and remove the cached APK from computer (~/.config/droidsink/)
+```
+
 ## How it Works
 
 DroidSink follows a specific lifecycle to enable audio over USB:
