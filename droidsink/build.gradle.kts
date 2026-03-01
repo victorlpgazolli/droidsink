@@ -9,8 +9,8 @@ plugins {
 }
 
 
-group = "me.user"
-version = "1.0-SNAPSHOT"
+group = "dev.victorlpgazolli.mobilesink"
+version = "1.1.0"
 
 repositories {
     mavenCentral()
@@ -50,12 +50,16 @@ kotlin {
             executable {
                 entryPoint = "main"
                 if (hostOs == "Mac OS X") {
+                    linkerOpts("-L/opt/homebrew/opt/libusb/lib", "-lusb-1.0")
                     freeCompilerArgs += listOf(
                         "-linker-options", "-macosx_version_min 15.0",
                         "-linker-options", "-framework IOKit",
                         "-linker-options", "-framework CoreFoundation",
                         "-linker-options", "-framework Security"
                     )
+                } else if (hostOs == "Linux") {
+                    val arch = if (isArm64) "aarch64" else "x86_64"
+                    linkerOpts("-L/usr/lib/$arch-linux-gnu", "-lusb-1.0")
                 }
             }
         }
@@ -63,7 +67,10 @@ kotlin {
             val libusb by cinterops.creating {
                 definitionFile.set(project.file("src/nativeInterop/cinterop/libusb.def"))
                 if (hostOs == "Mac OS X") {
-                    includeDirs("/opt/homebrew/include")
+                    includeDirs("/opt/homebrew/include/libusb-1.0", "/opt/homebrew/include")
+                    compilerOpts("-I/opt/homebrew/include/libusb-1.0")
+                } else if (hostOs == "Linux") {
+                    includeDirs("/usr/include/libusb-1.0")
                 }
             }
         }
