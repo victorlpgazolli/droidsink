@@ -15,8 +15,8 @@ The project consists of two parts:
 ## Features
 - pipe audio from virtual audio devices to Android devices over USB.
 - pipe microphone audio from Android devices to the computer over USB.
-- currently macOS only. aims to be cross-platform.
-- only 1 device at a time for now.
+- currently support Linux* and macOS. *linux support is experimental.
+- support only 1 device at a time.
 
 ```bash
 
@@ -45,15 +45,24 @@ Available commands:
 ## Prerequisites
 To run DroidSink, your system must have the following software installed:
 
-- [`libusb`](https://formulae.brew.sh/formula/libusb): Used for USB communication and AOA handshaking.
+- **libusb**: Used for USB communication and AOA handshaking.
+  - [`macOs`](https://formulae.brew.sh/formula/libusb)
+  - [`Linux`](https://packages.debian.org/sid/libusb-1.0-0-dev)
 
-- [`sox`](https://formulae.brew.sh/formula/sox): Required for audio processing and piping raw data.
+- **sox**: Required for audio processing and piping raw data.
+  - [`macOs`](https://formulae.brew.sh/formula/sox)
+  - [`Linux`](https://packages.debian.org/sid/sox)
 
-- [`adb`](https://formulae.brew.sh/cask/android-platform-tools): Required for initial device communication and app installation.
+- **adb**: Required for initial device communication and app installation.
+  - [`macOs`](https://formulae.brew.sh/cask/android-platform-tools)
+  - [`Linux`](https://packages.debian.org/sid/android-tools-adb)
 
-- [`wget`](https://formulae.brew.sh/formula/wget): Used for downloading the latest APK from GitHub releases (optional if you use --skip-app-install)
+- **wget**: Used for downloading the latest APK from GitHub releases (optional if you use --skip-app-install)
+  - [`macOs`](https://formulae.brew.sh/formula/wget)
+  - [`Linux`](https://packages.debian.org/sid/wget)
 
-- Any virtual audio driver to route system audio to DroidSink, suggestion: [`BlackHole 2ch`](https://formulae.brew.sh/cask/blackhole-2ch).    
+- Any virtual audio driver to route system audio to DroidSink, suggestion:
+  - MacOs: [`BlackHole 2ch`](https://formulae.brew.sh/cask/blackhole-2ch).
 
 ### Android Device Requirements
 
