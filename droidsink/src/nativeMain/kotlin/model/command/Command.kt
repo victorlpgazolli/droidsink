@@ -75,7 +75,7 @@ sealed class PrintableCommand: Command {
     data class Run(
         override val name: String = "run",
         override val description: String = "Install the app, start the service, and begin streaming data.",
-        override val parameters: List<Parameter> = listOf(Parameter.SkipAppInstall, Parameter.AudioInterface, Parameter.MicrophoneMode),
+        override val parameters: List<Parameter> = listOf(Parameter.SkipAppInstall, Parameter.AudioInterface, Parameter.MicrophoneMode, Parameter.UseFakeAudioInput),
         override val requirements: List<Requirement> = listOf(Requirement.Adb, Requirement.AudioDevice, Requirement.Sox, Requirement.Wget)
     ): PrintableCommand()
 

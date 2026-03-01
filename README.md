@@ -21,17 +21,25 @@ The project consists of two parts:
 ```bash
 
 Available commands:
-  install            - Install the accessory app on the connected device.
-  start              - Start the accessory service on the connected device.
-  stop               - Stop the accessory service on the connected device.
-  run                - (alias to run:as:speaker) Install the app, start the service, and begin streaming data.
-  run:as:speaker     - Run the service streaming audio from PC to Android
-  run:as:microphone  - Run the service streaming audio from Android to PC.
-  internal:list      - List connected USB accessories.
-  version            - Print the current version of the app.
+   install: Install the accessory app on the connected device.
 
-Available parameters:
-  --skip-app-install - Skip the app installation step when running 'run' or 'start' commands.
+   start: Start the accessory service on the connected device.
+       --skip-app-install: Skip the installation of the .apk on the connected device. (default: false)
+
+   stop: Stop the accessory service on the connected device.
+       --skip-app-install: Skip the installation of the .apk on the connected device. (default: false)
+
+   run: Install the app, start the service, and begin streaming data.
+       --skip-app-install: Skip the installation of the .apk on the connected device. (default: false)
+       --audio-interface: Specify the name of the audio interface to use for streaming. (default: "BlackHole 2ch")
+       --run-as-microphone: Run the application in microphone mode, which configures the device to provide audio data as if it were a microphone peripheral. (default: false)
+       --use-fake-audio-input: Use a fake audio input stream that generates some audio data instead of reading from the host. This is useful for testing the application without needing to have an actual audio input device connected. (default: false)
+
+   devices: List all connected devices and their statuses.
+
+   purge: Uninstall the app from the connected device, clear its data, and remove the downloaded APK from local storage.
+
+   version: Print the current version of this application.
 ```
 
 ## Prerequisites
@@ -41,11 +49,11 @@ To run DroidSink, your system must have the following software installed:
 
 - [`sox`](https://formulae.brew.sh/formula/sox): Required for audio processing and piping raw data.
 
-- [`BlackHole 2ch`](https://formulae.brew.sh/cask/blackhole-2ch): A virtual audio driver required to route system audio to DroidSink.
-    
 - [`adb`](https://formulae.brew.sh/cask/android-platform-tools): Required for initial device communication and app installation.
 
 - [`wget`](https://formulae.brew.sh/formula/wget): Used for downloading the latest APK from GitHub releases (optional if you use --skip-app-install)
+
+- Any virtual audio driver to route system audio to DroidSink, suggestion: [`BlackHole 2ch`](https://formulae.brew.sh/cask/blackhole-2ch).    
 
 ### Android Device Requirements
 
@@ -67,6 +75,13 @@ This command installs the app, triggers Accessory Mode, and starts streaming:
 # will install the app if not already installed and start the foreground service 
 # will turn the device into Accessory Mode if needed
 # will start streaming audio from "BlackHole 2ch" to the device
+
+./droidsink run --skip-app-install --audio-interface "BlackHole 2ch"
+# will skip the app installation step and start streaming audio from "BlackHole 2ch" to the device
+
+./droidsink run --run-as-microphone
+# will install the app if not already installed and start the foreground service in microphone mode
+# will start streaming audio from the device's microphone to the computer
 ```
 
 ```bash
@@ -82,9 +97,14 @@ This command installs the app, triggers Accessory Mode, and starts streaming:
 # Stop the foreground service on the device.
 ```
 ```bash
-./droidsink internal:list
+./droidsink devices
 # List all connected USB devices with their details.
 ```
+```bash
+./droidsink purge
+# Uninstall the .apk from the connected device, and remove the cached APK from computer (~/.config/droidsink/)
+```
+
 ## How it Works
 
 DroidSink follows a specific lifecycle to enable audio over USB:
