@@ -21,17 +21,25 @@ The project consists of two parts:
 ```bash
 
 Available commands:
-  install            - Install the accessory app on the connected device.
-  start              - Start the accessory service on the connected device.
-  stop               - Stop the accessory service on the connected device.
-  run                - (alias to run:as:speaker) Install the app, start the service, and begin streaming data.
-  run:as:speaker     - Run the service streaming audio from PC to Android
-  run:as:microphone  - Run the service streaming audio from Android to PC.
-  internal:list      - List connected USB accessories.
-  version            - Print the current version of the app.
+   install: Install the accessory app on the connected device.
 
-Available parameters:
-  --skip-app-install - Skip the app installation step when running 'run' or 'start' commands.
+   start: Start the accessory service on the connected device.
+       --skip-app-install: Skip the installation of the .apk on the connected device. (default: false)
+
+   stop: Stop the accessory service on the connected device.
+       --skip-app-install: Skip the installation of the .apk on the connected device. (default: false)
+
+   run: Install the app, start the service, and begin streaming data.
+       --skip-app-install: Skip the installation of the .apk on the connected device. (default: false)
+       --audio-interface: Specify the name of the audio interface to use for streaming. (default: "BlackHole 2ch")
+       --run-as-microphone: Run the application in microphone mode, which configures the device to provide audio data as if it were a microphone peripheral. (default: false)
+       --use-fake-audio-input: Use a fake audio input stream that generates some audio data instead of reading from the host. This is useful for testing the application without needing to have an actual audio input device connected. (default: false)
+
+   devices: List all connected devices and their statuses.
+
+   purge: Uninstall the app from the connected device, clear its data, and remove the downloaded APK from local storage.
+
+   version: Print the current version of this application.
 ```
 
 ## Prerequisites
