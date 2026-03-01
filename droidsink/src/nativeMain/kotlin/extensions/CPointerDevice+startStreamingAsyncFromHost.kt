@@ -12,16 +12,23 @@ import platform.posix.feof
 import platform.posix.ferror
 import platform.posix.fread
 import soxAudioInputStreamProvider
+import soxDebugAudioStreamProvider
 
 
 @OptIn(ExperimentalForeignApi::class)
-internal fun CPointer<libusb_device_handle>.startStreamingAsyncFromHost() {
-    val rawInputStream: CPointer<FILE> by lazy { soxAudioInputStreamProvider() }
+internal fun CPointer<libusb_device_handle>.startStreamingAsyncFromHost(audioInterfaceName: String, useFakeAudio: Boolean) {
+    val rawInputStream: CPointer<FILE> by lazy {
+        if (useFakeAudio) {
+            soxDebugAudioStreamProvider()
+        } else {
+            soxAudioInputStreamProvider(audioInterfaceName)
+        }
+    }
 
     val bufferSize = USB_WRITE_BUFFER_SIZE
 
     startStreamingAsyncInternal(
-        id = "Host->Client",
+        id = if (useFakeAudio) "Fake audio->Client" else "Host->Client",
         bufferSize = bufferSize,
         accessoryEndpoint = AOA_ENDPOINT_OUT,
         shouldKeepInflatingBuffer = { buffer ->

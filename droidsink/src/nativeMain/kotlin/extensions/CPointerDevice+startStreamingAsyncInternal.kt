@@ -35,8 +35,6 @@ internal fun CPointer<libusb_device_handle>.startStreamingAsyncInternal(
         val transfer = libusb_alloc_transfer(0)
         val buffer = nativeHeap.allocArray<UByteVar>(bufferSize)
 
-        shouldKeepInflatingBuffer?.invoke(buffer)
-
         libusb_fill_bulk_transfer(
             transfer,
             this,

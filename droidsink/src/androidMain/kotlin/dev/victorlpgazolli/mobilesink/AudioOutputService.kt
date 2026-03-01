@@ -7,29 +7,13 @@ import CHANNELS
 import FRAMES_PER_CHUNK
 import LOG_TAG
 import SAMPLE_RATE
-import android.app.*
-import android.app.Service.START_NOT_STICKY
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Context.USB_SERVICE
-import android.content.Intent
-import android.content.IntentFilter
-import android.hardware.usb.UsbAccessory
-import android.hardware.usb.UsbManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioTrack
-import android.os.Build
-import android.os.IBinder
 import android.os.ParcelFileDescriptor
-import android.os.Process.*
+import android.os.Process.THREAD_PRIORITY_URGENT_AUDIO
+import android.os.Process.setThreadPriority
 import android.util.Log
-import android.util.Log.e
-import androidx.core.app.ServiceCompat.startForeground
-import androidx.core.content.ContextCompat.getSystemService
-import androidx.core.content.ContextCompat.registerReceiver
-import kotlinx.coroutines.flow.StateFlow
 import java.io.FileInputStream
 
 class AudioOutputService : AudioSource {
@@ -85,7 +69,7 @@ class AudioOutputService : AudioSource {
                     }
                 }
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "Erro no streaming: ${e.message}")
+                Log.e(LOG_TAG, "Streaming error: ${e.message}")
             } finally {
                 audioTrack.stop()
                 audioTrack.release()
