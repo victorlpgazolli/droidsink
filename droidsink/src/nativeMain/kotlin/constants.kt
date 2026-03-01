@@ -22,4 +22,4 @@ internal const val AUDIO_READ_BUFFER_SIZE = AUDIO_READ_BUFFER_CAPACITY_FACTOR * 
 internal const val AOA_INTERFACE = 0
 internal const val AOA_ENDPOINT_OUT: UByte = 0x01u
 internal const val AOA_ENDPOINT_IN: UByte = 0x81u
-internal const val DEFAULT_AUDIO_DEVICE_NAME = "BlackHole 2ch"
+public const val DEFAULT_AUDIO_DEVICE_NAME = "BlackHole 2ch"
