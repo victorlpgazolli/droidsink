@@ -3,12 +3,14 @@ package dev.victorlpgazolli.mobilesink
 import CHANNELS
 import LOG_TAG
 import SAMPLE_RATE
+import android.Manifest
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.ParcelFileDescriptor
 import android.os.Process
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import java.io.FileOutputStream
 import java.io.IOException
 
@@ -22,6 +24,7 @@ class AudioInputService: AudioSource {
     private val fileOutputStream: FileOutputStream?
         get() = FileOutputStream(fileDescriptor?.fileDescriptor).takeIf { fileDescriptor?.fileDescriptor != null }
 
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     private fun initialize() {
         try {
             val bufferSize = getBufferSize()
@@ -40,6 +43,7 @@ class AudioInputService: AudioSource {
         }
     }
 
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     override fun startRecording(hostFileDescriptor: ParcelFileDescriptor) {
 
         fileDescriptor = hostFileDescriptor
