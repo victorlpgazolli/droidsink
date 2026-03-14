@@ -20,6 +20,6 @@ internal fun CPointerDevice.getPhysicalId(): UsbPhysicalId {
 
     return UsbPhysicalId(
         bus = bus,
-        portPath = ports.take(depth).map { it.toInt() }
+        portPath = ports.take(depth).map { it.toInt() },
     )
 }

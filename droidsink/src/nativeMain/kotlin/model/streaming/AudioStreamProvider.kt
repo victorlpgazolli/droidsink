@@ -10,6 +10,7 @@ internal interface AudioStreamProvider {
     operator fun invoke(audioInterfaceName: String? = null): CPointer<FILE>
 }
 
-internal fun AudioStreamProvider(start: (audioInterfaceName: String?) -> CPointer<FILE>): AudioStreamProvider = object : AudioStreamProvider {
-    override fun invoke(audioInterfaceName: String?): CPointer<FILE> = start(audioInterfaceName)
-}
+internal fun AudioStreamProvider(start: (audioInterfaceName: String?) -> CPointer<FILE>): AudioStreamProvider =
+    object : AudioStreamProvider {
+        override fun invoke(audioInterfaceName: String?): CPointer<FILE> = start(audioInterfaceName)
+    }

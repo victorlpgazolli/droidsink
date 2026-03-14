@@ -8,7 +8,6 @@ plugins {
     alias(libs.plugins.androidApplication)
 }
 
-
 group = "dev.victorlpgazolli.mobilesink"
 version = "1.1.0"
 
@@ -20,21 +19,22 @@ kotlin {
     val hostOs = System.getProperty("os.name")
     val isArm64 = System.getProperty("os.arch") == "aarch64"
     val isMingwX64 = hostOs.startsWith("Windows")
-    val nativeTarget = when {
-        hostOs == "Mac OS X" && isArm64 -> macosArm64()
-        hostOs == "Mac OS X" && !isArm64 -> macosX64()
-        hostOs == "Linux" && isArm64 -> linuxArm64()
-        hostOs == "Linux" && !isArm64 -> linuxX64()
-        isMingwX64 -> mingwX64()
-        else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
-    }
+    val nativeTarget =
+        when {
+            hostOs == "Mac OS X" && isArm64 -> macosArm64()
+            hostOs == "Mac OS X" && !isArm64 -> macosX64()
+            hostOs == "Linux" && isArm64 -> linuxArm64()
+            hostOs == "Linux" && !isArm64 -> linuxX64()
+            isMingwX64 -> mingwX64()
+            else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
+        }
 
     androidTarget {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
-    
+
     sourceSets {
         commonMain.dependencies {
             implementation(libs.kotlinxSerializationJson)
@@ -69,18 +69,25 @@ kotlin {
             }
         }
     }
-
 }
-
 
 android {
     namespace = "dev.victorlpgazolli.mobilesink"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
+    compileSdk =
+        libs.versions.android.compileSdk
+            .get()
+            .toInt()
 
     defaultConfig {
         applicationId = "dev.victorlpgazolli.mobilesink"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
+        minSdk =
+            libs.versions.android.minSdk
+                .get()
+                .toInt()
+        targetSdk =
+            libs.versions.android.targetSdk
+                .get()
+                .toInt()
         versionCode = 1
         versionName = "1.0"
     }
@@ -103,7 +110,6 @@ android {
                 storePassword = keystoreProperties["storePassword"] as String
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
-
             }
         }
         getByName("release") {

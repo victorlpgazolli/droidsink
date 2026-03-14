@@ -10,5 +10,5 @@ internal data class AsyncStreamContext(
     val endpoint: UByte,
     val bufferSize: Int,
     val onTransferred: ((Pair<CPointer<UByteVar>, Int>) -> Unit)?,
-    val shouldKeepInflatingBuffer: ((CPointer<UByteVar>) -> Boolean)?
+    val shouldKeepInflatingBuffer: ((CPointer<UByteVar>) -> Boolean)?,
 )

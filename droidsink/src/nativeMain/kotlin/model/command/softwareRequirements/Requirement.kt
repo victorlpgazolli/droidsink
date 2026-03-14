@@ -5,8 +5,11 @@ import model.command.Session
 
 internal sealed class Requirement {
     object Adb : Requirement()
+
     object Sox : Requirement()
+
     object AudioDevice : Requirement()
+
     object Wget : Requirement()
 }
 

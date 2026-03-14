@@ -1,6 +1,5 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
-
 import cnames.structs.libusb_context
 import cnames.structs.libusb_device
 import cnames.structs.libusb_device_handle
@@ -52,28 +51,38 @@ import kotlin.concurrent.AtomicInt
 
 internal val sessionActive: AtomicInt = AtomicInt(1)
 
-internal class UsbSessionInternal(private val contextPointer: CPointer<libusb_context>) : UsbSession {
+internal class UsbSessionInternal(
+    private val contextPointer: CPointer<libusb_context>,
+) : UsbSession {
+    override fun listAccessories(): List<Peripheral> =
+        memScoped {
+            listAccessoriesInternal()
+        }
 
-    override fun listAccessories(): List<Peripheral> = memScoped {
-        listAccessoriesInternal()
-    }
+    override fun setupAccessoryMode(peripheral: Peripheral) =
+        memScoped {
+            setupAccessoryModeInternal(peripheral.vendorId.toUShort(), peripheral.productId.toUShort())
+        }
 
-    override fun setupAccessoryMode(peripheral: Peripheral) = memScoped {
-        setupAccessoryModeInternal(peripheral.vendorId.toUShort(), peripheral.productId.toUShort())
-    }
-
-    override fun waitUntilAccessoryReady(expectedVendor: Int, expectedProducts: Set<Int>, timeoutSeconds: Int) = memScoped {
+    override fun waitUntilAccessoryReady(
+        expectedVendor: Int,
+        expectedProducts: Set<Int>,
+        timeoutSeconds: Int,
+    ) = memScoped {
         waitUntilAccessoryReadyInternal(expectedVendor, expectedProducts, timeoutSeconds)
     }
 
-    override fun startStreamingFromPeripheral(peripheral: Peripheral, type: StreamingType) = memScoped {
+    override fun startStreamingFromPeripheral(
+        peripheral: Peripheral,
+        type: StreamingType,
+    ) = memScoped {
         peripheral.startStreamingInternal(type)
     }
 
-    override fun getAccessoryInfo(peripheral: Peripheral): Peripheral? = memScoped {
-        getAccessoryInfoInternal(peripheral.vendorId.toUShort(), peripheral.productId.toUShort())
-    }
-
+    override fun getAccessoryInfo(peripheral: Peripheral): Peripheral? =
+        memScoped {
+            getAccessoryInfoInternal(peripheral.vendorId.toUShort(), peripheral.productId.toUShort())
+        }
 
     private fun MemScope.listAccessoriesInternal(): List<Peripheral> {
         val list = mutableListOf<Peripheral>()
@@ -89,12 +98,13 @@ internal class UsbSessionInternal(private val contextPointer: CPointer<libusb_co
             val handlePtr = alloc<CPointerVar<libusb_device_handle>>()
             if (libusb_open(device, handlePtr.ptr) == 0) {
                 val h = handlePtr.value
-                list += Peripheral(
-                    name = readString(h, descriptor.iProduct),
-                    serialNumber = readString(h, descriptor.iSerialNumber),
-                    vendorId = descriptor.idVendor.toVendorId(),
-                    productId = descriptor.idProduct.toProductId()
-                )
+                list +=
+                    Peripheral(
+                        name = readString(h, descriptor.iProduct),
+                        serialNumber = readString(h, descriptor.iSerialNumber),
+                        vendorId = descriptor.idVendor.toVendorId(),
+                        productId = descriptor.idProduct.toProductId(),
+                    )
                 libusb_close(h)
             }
         }
@@ -103,10 +113,13 @@ internal class UsbSessionInternal(private val contextPointer: CPointer<libusb_co
         return list
     }
 
-
-    private fun MemScope.setupAccessoryModeInternal(vendorId: UShort, productId: UShort) {
-        val handle = libusb_open_device_with_vid_pid(contextPointer, vendorId, productId)
-            ?: return
+    private fun MemScope.setupAccessoryModeInternal(
+        vendorId: UShort,
+        productId: UShort,
+    ) {
+        val handle =
+            libusb_open_device_with_vid_pid(contextPointer, vendorId, productId)
+                ?: return
 
         libusb_set_auto_detach_kernel_driver(handle, 1)
 
@@ -120,7 +133,7 @@ internal class UsbSessionInternal(private val contextPointer: CPointer<libusb_co
             0u,
             proto,
             2u,
-            0u
+            0u,
         )
 
         sendString(handle, 0, "Victor")
@@ -130,8 +143,9 @@ internal class UsbSessionInternal(private val contextPointer: CPointer<libusb_co
         sendString(handle, 4, "http://localhost")
         sendString(handle, 5, "0001")
 
-        val physicalId = libusb_get_device(handle)
-            ?.getPhysicalId()
+        val physicalId =
+            libusb_get_device(handle)
+                ?.getPhysicalId()
 
         libusb_control_transfer(
             handle,
@@ -141,7 +155,7 @@ internal class UsbSessionInternal(private val contextPointer: CPointer<libusb_co
             0u,
             null,
             0u,
-            0u
+            0u,
         )
 
         libusb_close(handle)
@@ -151,37 +165,44 @@ internal class UsbSessionInternal(private val contextPointer: CPointer<libusb_co
         physicalId?.waitUntilPeripheralReenumerates(
             contextPointer,
             expectedVendor = GOOGLE_VID,
-            expectedProducts = AOA_PIDS
+            expectedProducts = AOA_PIDS,
         )
     }
 
-    private fun MemScope.getAccessoryInfoInternal(vendorId: UShort, productId: UShort): Peripheral? {
-        val handle = libusb_open_device_with_vid_pid(contextPointer, vendorId, productId)
-            ?: return null
+    private fun MemScope.getAccessoryInfoInternal(
+        vendorId: UShort,
+        productId: UShort,
+    ): Peripheral? {
+        val handle =
+            libusb_open_device_with_vid_pid(contextPointer, vendorId, productId)
+                ?: return null
 
         val descriptor = alloc<libusb_device_descriptor>()
         libusb_get_device_descriptor(libusb_get_device(handle), descriptor.ptr)
 
-        val info = Peripheral(
-            name = readString(handle, descriptor.iProduct),
-            serialNumber = readString(handle, descriptor.iSerialNumber),
-            vendorId = vendorId.toVendorId(),
-            productId = productId.toProductId()
-        )
+        val info =
+            Peripheral(
+                name = readString(handle, descriptor.iProduct),
+                serialNumber = readString(handle, descriptor.iSerialNumber),
+                vendorId = vendorId.toVendorId(),
+                productId = productId.toProductId(),
+            )
 
         libusb_close(handle)
         return info
     }
+
     private fun Peripheral.startStreamingInternal(type: StreamingType) {
+        val newPeripheralInfo =
+            findPeripheralBySerialNumber(this.serialNumber)
+                ?: error("Peripheral with serial number ${this.serialNumber} not found.")
 
-        val newPeripheralInfo = findPeripheralBySerialNumber(this.serialNumber)
-            ?: error("Peripheral with serial number ${this.serialNumber} not found.")
-
-        val handle = libusb_open_device_with_vid_pid(
-            contextPointer,
-            newPeripheralInfo.vendorId.toUShort(),
-            newPeripheralInfo.productId.toUShort()
-        ) ?: error("Failed to open device ${this.name} for streaming.")
+        val handle =
+            libusb_open_device_with_vid_pid(
+                contextPointer,
+                newPeripheralInfo.vendorId.toUShort(),
+                newPeripheralInfo.productId.toUShort(),
+            ) ?: error("Failed to open device ${this.name} for streaming.")
 
         libusb_set_auto_detach_kernel_driver(handle, 1)
 
@@ -208,7 +229,7 @@ internal class UsbSessionInternal(private val contextPointer: CPointer<libusb_co
     private fun MemScope.waitUntilAccessoryReadyInternal(
         expectedVendor: Int = GOOGLE_VID,
         expectedProducts: Set<Int> = AOA_PIDS,
-        timeoutSeconds: Int = 30
+        timeoutSeconds: Int = 30,
     ) {
         val start = time(null)
 

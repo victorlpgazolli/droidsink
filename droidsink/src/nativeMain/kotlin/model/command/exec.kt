@@ -9,21 +9,26 @@ import platform.posix.pclose
 import platform.posix.popen
 
 @OptIn(ExperimentalForeignApi::class)
-internal fun exec(cmd: String, suppressLogs: Boolean = true): String = memScoped {
-    val silentCmd = "$cmd 2>/dev/null"
-    val pipe = popen(
-        if(suppressLogs) silentCmd else cmd,
-        "r"
-    ) ?: error("popen failed")
+internal fun exec(
+    cmd: String,
+    suppressLogs: Boolean = true,
+): String =
+    memScoped {
+        val silentCmd = "$cmd 2>/dev/null"
+        val pipe =
+            popen(
+                if (suppressLogs) silentCmd else cmd,
+                "r",
+            ) ?: error("popen failed")
 
-    val buffer = ByteArray(4096)
-    val output = StringBuilder()
+        val buffer = ByteArray(4096)
+        val output = StringBuilder()
 
-    while (true) {
-        val read = fgets(buffer.refTo(0), buffer.size, pipe) ?: break
-        output.append(read.toKString())
+        while (true) {
+            val read = fgets(buffer.refTo(0), buffer.size, pipe) ?: break
+            output.append(read.toKString())
+        }
+
+        pclose(pipe)
+        output.toString()
     }
-
-    pclose(pipe)
-    output.toString()
-}

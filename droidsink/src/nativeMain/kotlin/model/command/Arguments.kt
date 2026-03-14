@@ -4,7 +4,7 @@ import DEFAULT_AUDIO_DEVICE_NAME
 import model.command.exceptions.InvalidCommandException
 
 internal fun Array<String>.toSessionOrThrow(): Session {
-    if(isEmpty()) {
+    if (isEmpty()) {
         throw InvalidCommandException
     }
     val hasSkipAppInstallParameter = contains(Parameter.SkipAppInstall.name)
@@ -12,13 +12,14 @@ internal fun Array<String>.toSessionOrThrow(): Session {
     val hasCustomAudioDevice = contains(Parameter.AudioInterface.name)
     val useFakeAudioInput = contains(Parameter.UseFakeAudioInput.name)
 
-    val audioInterfaceName = if (hasCustomAudioDevice) {
-        val index = indexOf(Parameter.AudioInterface.name)
+    val audioInterfaceName =
+        if (hasCustomAudioDevice) {
+            val index = indexOf(Parameter.AudioInterface.name)
 
-        get(index + 1)
-    } else {
-        DEFAULT_AUDIO_DEVICE_NAME
-    }
+            get(index + 1)
+        } else {
+            DEFAULT_AUDIO_DEVICE_NAME
+        }
 
     return object : Session {
         override val hasSkipAppInstallParameter: Boolean = hasSkipAppInstallParameter
@@ -29,7 +30,7 @@ internal fun Array<String>.toSessionOrThrow(): Session {
 }
 
 internal fun Array<String>.getCommandOrThrow(): Command {
-    if(isEmpty()) {
+    if (isEmpty()) {
         throw InvalidCommandException
     }
     return PrintableCommand.from(first())
