@@ -1,8 +1,8 @@
 package model.command.softwareRequirements
 
-import exec
 import model.command.Session
 import model.command.exceptions.AudioInterfaceNotFoundException
+import model.command.exec
 
 internal fun Session.ensureAudioDeviceExistsOrThrow() {
     val out = exec("system_profiler SPAudioDataType")

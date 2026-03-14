@@ -10,7 +10,7 @@ import libusb.libusb_init
 import model.UsbInterop
 import model.UsbSession
 
-class UsbInteropImpl: UsbInterop {
+internal class UsbInteropImpl: UsbInterop {
 
     @OptIn(ExperimentalForeignApi::class)
     override fun <T> runSession(block: UsbSession.() -> T): T = memScoped {
@@ -23,6 +23,13 @@ class UsbInteropImpl: UsbInterop {
             return@memScoped session.block()
         } finally {
             libusb_exit(context)
+        }
+    }
+
+    companion object {
+        fun <T> runSession(block: UsbSession.() -> T): T {
+            val usb = UsbInteropImpl()
+            return usb.runSession(block)
         }
     }
 }

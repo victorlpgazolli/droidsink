@@ -1,7 +1,7 @@
 package model.peripheral
 
-value class VendorId(val id: String)
+internal value class VendorId(val id: String)
 
 
-fun UShort.toVendorId(): VendorId = VendorId(this.toString())
-fun VendorId.toUShort(): UShort = id.toUShort()
+internal fun UShort.toVendorId(): VendorId = VendorId(this.toString())
+internal fun VendorId.toUShort(): UShort = id.toUShort()

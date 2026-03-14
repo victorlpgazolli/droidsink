@@ -1,6 +1,6 @@
 package model.usb
 
-data class UsbPhysicalId(
+internal data class UsbPhysicalId(
     val bus: Int,
     val portPath: List<Int>
 )

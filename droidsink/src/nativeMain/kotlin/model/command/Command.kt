@@ -3,7 +3,7 @@ package model.command
 import DEFAULT_AUDIO_DEVICE_NAME
 import model.command.softwareRequirements.Requirement
 
-val allCommands: List<Command> = listOf(
+internal val allCommands: List<Command> = listOf(
     PrintableCommand.Install(),
     PrintableCommand.Start(),
     PrintableCommand.Stop(),
@@ -13,7 +13,7 @@ val allCommands: List<Command> = listOf(
     PrintableCommand.Version()
 )
 
-public sealed class Parameter(
+internal  sealed class Parameter(
     val name: String,
     val description: String,
     val defaultValue: String? = null,
@@ -43,14 +43,14 @@ public sealed class Parameter(
 
 }
 
-interface Command {
+internal interface Command {
     val name: String
     val description: String
     val parameters: List<Parameter>
     val requirements: List<Requirement>
 }
 
-sealed class PrintableCommand: Command {
+internal sealed class PrintableCommand: Command {
     data class Install(
         override val name: String = "install",
         override val description: String = "Install the accessory app on the connected device.",

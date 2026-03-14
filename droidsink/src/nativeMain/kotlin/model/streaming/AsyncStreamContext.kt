@@ -5,7 +5,7 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.UByteVar
 
 @OptIn(ExperimentalForeignApi::class)
-data class AsyncStreamContext(
+internal data class AsyncStreamContext(
     val id: String,
     val endpoint: UByte,
     val bufferSize: Int,

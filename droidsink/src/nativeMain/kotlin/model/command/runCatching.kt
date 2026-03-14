@@ -7,7 +7,7 @@ import model.command.exceptions.InvalidCommandException
 import model.command.exceptions.NoDeviceWithAdbFoundException
 import model.command.exceptions.RequiredSoftwareNotFoundException
 
-inline fun runCatching(block: () -> Unit) {
+internal inline fun runCatching(block: () -> Unit) {
     try {
         block()
     } catch (_: InvalidCommandException) {

@@ -1,18 +1,56 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
 
-import kotlinx.cinterop.*
-import libusb.*
-import platform.posix.*
-import cnames.structs.*
-import model.peripheral.*
-import model.streaming.*
-import extensions.*
+import cnames.structs.libusb_context
+import cnames.structs.libusb_device
+import cnames.structs.libusb_device_handle
+import extensions.findPeripheralBySerialNumber
+import extensions.getPhysicalId
+import extensions.readString
+import extensions.sendString
+import extensions.startStreaming
+import extensions.waitUntilPeripheralReenumerates
+import kotlinx.cinterop.CPointer
+import kotlinx.cinterop.CPointerVar
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.MemScope
+import kotlinx.cinterop.UByteVar
+import kotlinx.cinterop.alloc
+import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.get
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.ptr
+import kotlinx.cinterop.value
+import libusb.LIBUSB_ENDPOINT_IN
+import libusb.LIBUSB_ENDPOINT_OUT
+import libusb.LIBUSB_REQUEST_TYPE_VENDOR
+import libusb.libusb_claim_interface
+import libusb.libusb_close
+import libusb.libusb_control_transfer
+import libusb.libusb_device_descriptor
+import libusb.libusb_error_name
+import libusb.libusb_free_device_list
+import libusb.libusb_get_device
+import libusb.libusb_get_device_descriptor
+import libusb.libusb_get_device_list
+import libusb.libusb_handle_events
+import libusb.libusb_open
+import libusb.libusb_open_device_with_vid_pid
+import libusb.libusb_release_interface
+import libusb.libusb_set_auto_detach_kernel_driver
 import model.UsbSession
-import kotlin.collections.plusAssign
+import model.peripheral.Peripheral
+import model.peripheral.toProductId
+import model.peripheral.toUShort
+import model.peripheral.toVendorId
+import model.streaming.StreamingType
+import platform.posix.fprintf
+import platform.posix.sleep
+import platform.posix.stderr
+import platform.posix.time
 import kotlin.concurrent.AtomicInt
 
-val sessionActive: AtomicInt = AtomicInt(1)
+internal val sessionActive: AtomicInt = AtomicInt(1)
 
 internal class UsbSessionInternal(private val contextPointer: CPointer<libusb_context>) : UsbSession {
 

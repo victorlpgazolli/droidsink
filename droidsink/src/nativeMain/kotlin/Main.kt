@@ -1,9 +1,7 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
+import extensions.adb
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.memScoped
-import kotlinx.cinterop.refTo
-import kotlinx.cinterop.toKString
 import model.UsbSession
 import model.command.Parameter
 import model.command.PrintableCommand
@@ -11,19 +9,17 @@ import model.command.Session
 import model.command.exceptions.AppNotInstalledException
 import model.command.exceptions.InvalidCommandException
 import model.command.exceptions.NoDeviceWithAdbFoundException
+import model.command.exec
 import model.command.getCommandOrThrow
 import model.command.runCatching
 import model.command.softwareRequirements.assertRequirements
 import model.command.toSessionOrThrow
 import model.peripheral.Peripheral
 import model.streaming.StreamingType
-import platform.posix.fgets
-import platform.posix.pclose
-import platform.posix.popen
 import platform.posix.sleep
 import kotlin.time.Duration.Companion.seconds
 
-fun main(args: Array<String>) = runCatching {
+public fun main(args: Array<String>) = runCatching {
     val session = args.toSessionOrThrow()
 
     val command = args.getCommandOrThrow()
@@ -43,27 +39,8 @@ fun main(args: Array<String>) = runCatching {
 }
 
 
-@OptIn(ExperimentalForeignApi::class)
-fun exec(cmd: String, suppressLogs: Boolean = true): String = memScoped {
-    val silentCmd = "$cmd 2>/dev/null"
-    val pipe = popen(
-        if(suppressLogs) silentCmd else cmd,
-        "r"
-    ) ?: error("popen failed")
 
-    val buffer = ByteArray(4096)
-    val output = StringBuilder()
-
-    while (true) {
-        val read = fgets(buffer.refTo(0), buffer.size, pipe) ?: break
-        output.append(read.toKString())
-    }
-
-    pclose(pipe)
-    output.toString()
-}
-
-fun Session.installApp() {
+private fun Session.installApp() {
     if (hasSkipAppInstallParameter) {
         println("Skipping app installation as ${Parameter.SkipAppInstall.name} parameter is present.")
         return
@@ -71,19 +48,10 @@ fun Session.installApp() {
     getFirstPeripheralWithAdbOrThrow().installAccessoryAppOrThrow()
 }
 
-fun Peripheral.stop() {
+private fun Peripheral.stop() {
     println("Stopping the service...")
     adb("shell am force-stop $BUNDLE_ID")
 }
-private fun Peripheral?.adb(parameters: String): String {
-    val customOption = this?.serialNumber.let { serial ->
-        "-s $serial"
-    }
-
-    return exec("adb $customOption $parameters", suppressLogs = this != null)
-}
-
-
 private fun Peripheral?.installAppOrThrow() {
     val configPath = "~/.config/droidsink"
 
@@ -107,8 +75,8 @@ private fun Peripheral.isAppInstalled(): Boolean {
     return output.contains(BUNDLE_ID)
 }
 
-fun printAllPeripherals() {
-    runSession {
+private fun printAllPeripherals() {
+    UsbInteropImpl.runSession {
         listAccessories().forEachIndexed { index, peripheral ->
             val hasAdb = peripheral.hasAdb()
             val isFirst = index == 0
@@ -148,14 +116,10 @@ private fun Peripheral.startService() {
 }
 
 
-private fun <T> runSession(block: UsbSession.() -> T): T {
-    val usb = UsbInteropImpl()
-    return usb.runSession(block)
+private fun getFirstPeripheralWithAdbOrThrow(): Peripheral {
+    return UsbInteropImpl.runSession { getFirstPeripheralWithAdbOrThrow() }
 }
-fun getFirstPeripheralWithAdbOrThrow(): Peripheral {
-    return runSession { getFirstPeripheralWithAdbOrThrow() }
-}
-fun UsbSession.getFirstPeripheralWithAdbOrThrow(): Peripheral {
+private fun UsbSession.getFirstPeripheralWithAdbOrThrow(): Peripheral {
     val selectedPeripherals = listAccessories().filter { it.hasAdb() }
 
     if (selectedPeripherals.isEmpty()) {
@@ -256,7 +220,7 @@ private fun Session.run() {
 }
 
 private fun Session.run(type: StreamingType) {
-    runSession {
+    UsbInteropImpl.runSession {
         val peripheral = deviceInAccessoryModeOrNull()
             ?: throw IllegalStateException("No device in Accessory Mode available.")
         if (hasSkipAppInstallParameter) {

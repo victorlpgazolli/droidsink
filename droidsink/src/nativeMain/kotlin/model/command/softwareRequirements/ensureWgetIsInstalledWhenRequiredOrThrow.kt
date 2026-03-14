@@ -1,9 +1,9 @@
 package model.command.softwareRequirements
 
-import exec
 import model.command.Session
 import model.command.Parameter
 import model.command.exceptions.RequiredSoftwareNotFoundException
+import model.command.exec
 
 internal fun Session.ensureWgetIsInstalledWhenRequiredOrThrow(): Unit {
     val wgetIsRequired = hasSkipAppInstallParameter.not()

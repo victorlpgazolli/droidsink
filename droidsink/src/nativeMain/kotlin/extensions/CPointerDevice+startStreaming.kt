@@ -12,7 +12,7 @@ import kotlin.native.concurrent.withWorker
 
 
 @OptIn(ExperimentalForeignApi::class)
-fun CPointer<libusb_device_handle>.startStreaming(
+internal fun CPointer<libusb_device_handle>.startStreaming(
     type: StreamingType
 ) = withWorker {
     execute(TransferMode.SAFE, { Pair(this@startStreaming.toLong(), type) }) { (handlePtr, type) ->

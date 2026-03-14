@@ -3,7 +3,7 @@ package model.command
 import DEFAULT_AUDIO_DEVICE_NAME
 import model.command.exceptions.InvalidCommandException
 
-fun Array<String>.toSessionOrThrow(): Session {
+internal fun Array<String>.toSessionOrThrow(): Session {
     if(isEmpty()) {
         throw InvalidCommandException
     }
@@ -28,7 +28,7 @@ fun Array<String>.toSessionOrThrow(): Session {
     }
 }
 
-fun Array<String>.getCommandOrThrow(): Command {
+internal fun Array<String>.getCommandOrThrow(): Command {
     if(isEmpty()) {
         throw InvalidCommandException
     }

@@ -1,6 +1,6 @@
 package model.streaming
 
-sealed class StreamingType(
+internal sealed class StreamingType(
     audioInterface: String,
     useFakeAudioInput: Boolean = false
 ) {
