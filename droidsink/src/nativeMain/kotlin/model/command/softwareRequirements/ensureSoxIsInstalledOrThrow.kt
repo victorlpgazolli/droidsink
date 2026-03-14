@@ -1,7 +1,7 @@
 package model.command.softwareRequirements
 
-import exec
 import model.command.exceptions.RequiredSoftwareNotFoundException
+import model.command.exec
 
 internal fun ensureSoxIsInstalledOrThrow() {
     val soxBinaryLocation = exec("which sox").trim()

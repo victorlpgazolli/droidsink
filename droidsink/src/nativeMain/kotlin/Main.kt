@@ -1,9 +1,7 @@
 @file:OptIn(ExperimentalForeignApi::class)
 
+import extensions.adb
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.memScoped
-import kotlinx.cinterop.refTo
-import kotlinx.cinterop.toKString
 import model.UsbSession
 import model.command.Parameter
 import model.command.PrintableCommand
@@ -11,78 +9,48 @@ import model.command.Session
 import model.command.exceptions.AppNotInstalledException
 import model.command.exceptions.InvalidCommandException
 import model.command.exceptions.NoDeviceWithAdbFoundException
+import model.command.exec
 import model.command.getCommandOrThrow
 import model.command.runCatching
 import model.command.softwareRequirements.assertRequirements
 import model.command.toSessionOrThrow
 import model.peripheral.Peripheral
 import model.streaming.StreamingType
-import platform.posix.fgets
-import platform.posix.pclose
-import platform.posix.popen
 import platform.posix.sleep
 import kotlin.time.Duration.Companion.seconds
 
-fun main(args: Array<String>) = runCatching {
-    val session = args.toSessionOrThrow()
+public fun main(args: Array<String>) =
+    runCatching {
+        val session = args.toSessionOrThrow()
 
-    val command = args.getCommandOrThrow()
+        val command = args.getCommandOrThrow()
 
-    command.assertRequirements(session)
+        command.assertRequirements(session)
 
-    when (command) {
-        is PrintableCommand.Version -> println(APP_VERSION)
-        is PrintableCommand.Install -> session.installApp()
-        is PrintableCommand.Start  -> getFirstPeripheralWithAdbOrThrow().startService()
-        is PrintableCommand.Stop -> getFirstPeripheralWithAdbOrThrow().stop()
-        is PrintableCommand.Run -> session.run()
-        is PrintableCommand.Devices -> printAllPeripherals()
-        is PrintableCommand.Purge -> getFirstPeripheralWithAdbOrThrow().purge()
-        else -> throw InvalidCommandException
-    }
-}
-
-
-@OptIn(ExperimentalForeignApi::class)
-fun exec(cmd: String, suppressLogs: Boolean = true): String = memScoped {
-    val silentCmd = "$cmd 2>/dev/null"
-    val pipe = popen(
-        if(suppressLogs) silentCmd else cmd,
-        "r"
-    ) ?: error("popen failed")
-
-    val buffer = ByteArray(4096)
-    val output = StringBuilder()
-
-    while (true) {
-        val read = fgets(buffer.refTo(0), buffer.size, pipe) ?: break
-        output.append(read.toKString())
+        when (command) {
+            is PrintableCommand.Version -> println(APP_VERSION)
+            is PrintableCommand.Install -> session.installApp()
+            is PrintableCommand.Start -> session.getPeripheralWithAdbOrThrow().startService()
+            is PrintableCommand.Stop -> session.getPeripheralWithAdbOrThrow().stop()
+            is PrintableCommand.Run -> session.run()
+            is PrintableCommand.Devices -> printAllPeripherals()
+            is PrintableCommand.Purge -> session.getPeripheralWithAdbOrThrow().purge()
+            else -> throw InvalidCommandException
+        }
     }
 
-    pclose(pipe)
-    output.toString()
-}
-
-fun Session.installApp() {
+private fun Session.installApp() {
     if (hasSkipAppInstallParameter) {
         println("Skipping app installation as ${Parameter.SkipAppInstall.name} parameter is present.")
         return
     }
-    getFirstPeripheralWithAdbOrThrow().installAccessoryAppOrThrow()
+    getPeripheralWithAdbOrThrow().installAccessoryAppOrThrow()
 }
 
-fun Peripheral.stop() {
+private fun Peripheral.stop() {
     println("Stopping the service...")
     adb("shell am force-stop $BUNDLE_ID")
 }
-private fun Peripheral?.adb(parameters: String): String {
-    val customOption = this?.serialNumber.let { serial ->
-        "-s $serial"
-    }
-
-    return exec("adb $customOption $parameters", suppressLogs = this != null)
-}
-
 
 private fun Peripheral?.installAppOrThrow() {
     val configPath = "~/.config/droidsink"
@@ -92,7 +60,7 @@ private fun Peripheral?.installAppOrThrow() {
     val apkPath = "$configPath/$APP_VERSION.apk"
 
     val fileExists = exec("test -f $apkPath && echo exists").trim() == "exists"
-    if(fileExists.not()) {
+    if (fileExists.not()) {
         println("Downloading APK from $APP_URL to $apkPath")
         exec("wget $APP_URL -O $apkPath --show-progress --progress=bar:force:noscroll")
     }
@@ -107,82 +75,98 @@ private fun Peripheral.isAppInstalled(): Boolean {
     return output.contains(BUNDLE_ID)
 }
 
-fun printAllPeripherals() {
-    runSession {
+private fun printAllPeripherals() {
+    UsbInteropImpl.runSession {
         listAccessories().forEachIndexed { index, peripheral ->
             val hasAdb = peripheral.hasAdb()
             val isFirst = index == 0
             val selectedPrefix = if (isFirst) "(auto-selected)" else index
-            println("Peripheral ${selectedPrefix}: ${peripheral.name}, Serial: ${peripheral.serialNumber}, Config: ${peripheral.getUsbConfigType()}, Has ADB: $hasAdb")
+            println(
+                "Peripheral $selectedPrefix: ${peripheral.name}, Serial: ${peripheral.serialNumber}, Config: ${peripheral.getUsbConfigType()}, Has ADB: $hasAdb",
+            )
         }
     }
 }
 
 private fun Peripheral.getUsbConfigType(): List<String> {
-    val configurations = adb("shell getprop sys.usb.config")
-        .split(",")
-        .map { config -> config.trim() }
+    val configurations =
+        adb("shell getprop sys.usb.config")
+            .split(",")
+            .map { config -> config.trim() }
     return configurations
 }
 
 private fun Peripheral.hasAdb(): Boolean {
     val hasAnySerialNumber = serialNumber != "Unknown"
-    if(!hasAnySerialNumber) return false
+    if (!hasAnySerialNumber) return false
 
-    val hasAdb = getUsbConfigType()
-        .firstOrNull { config -> config == "adb" }
+    val hasAdb =
+        getUsbConfigType()
+            .firstOrNull { config -> config == "adb" }
 
     return hasAdb != null
 }
 
 private fun Peripheral.startService() {
-    if(isAppInstalled().not()) {
+    if (isAppInstalled().not()) {
         throw AppNotInstalledException(
             bundleId = BUNDLE_ID,
             message = "Cannot start service because the app is not installed on the device.",
-            cause = null
+            cause = null,
         )
     }
     println("Starting foreground service on device...")
     adb("shell am start-foreground-service -n $BUNDLE_ID/.AccessoryService")
 }
 
+private fun Session.getPeripheralWithAdbOrThrow(): Peripheral =
+    UsbInteropImpl
+        .runSession {
+            selectedSerialNumber?.let { getPeripheralBySerialNumberOrThrow(it) }
+                ?: getFirstPeripheralWithAdbOrThrow()
+        }.also {
+            it.printSelectedPeripheral()
+        }
 
-private fun <T> runSession(block: UsbSession.() -> T): T {
-    val usb = UsbInteropImpl()
-    return usb.runSession(block)
+private fun UsbSession.getPeripheralBySerialNumberOrThrow(selectedSerialNumber: String): Peripheral =
+    listAccessories()
+        .find {
+            it.serialNumber == selectedSerialNumber
+        } ?: throw NoDeviceWithAdbFoundException(selectedSerialNumber = selectedSerialNumber)
+
+private fun Peripheral.printSelectedPeripheral() {
+    println(
+        "Selected Peripheral: $name (VID: $vendorId, PID: $productId, Serial: $serialNumber), configType: ${getUsbConfigType()}",
+    )
 }
-fun getFirstPeripheralWithAdbOrThrow(): Peripheral {
-    return runSession { getFirstPeripheralWithAdbOrThrow() }
-}
-fun UsbSession.getFirstPeripheralWithAdbOrThrow(): Peripheral {
+
+private fun UsbSession.getFirstPeripheralWithAdbOrThrow(): Peripheral {
     val selectedPeripherals = listAccessories().filter { it.hasAdb() }
 
     if (selectedPeripherals.isEmpty()) {
         throw NoDeviceWithAdbFoundException()
     }
-    val selectedPeripheral = selectedPeripherals.firstOrNull() ?: run {
-        throw NoDeviceWithAdbFoundException()
-    }
+    val selectedPeripheral =
+        selectedPeripherals.firstOrNull() ?: run {
+            throw NoDeviceWithAdbFoundException()
+        }
     if (selectedPeripherals.size > 1) {
         println("Multiple connected accessories with ADB found. Selecting the first one: ${selectedPeripheral.name}")
     }
-    return selectedPeripheral.also {
-        println("Selected Peripheral: ${it.name} (VID: ${it.vendorId}, PID: ${it.productId}, Serial: ${it.serialNumber}), configType: ${it.getUsbConfigType()}")
-    }
+    return selectedPeripheral
 }
 
 private fun UsbSession.deviceInAccessoryModeOrNull(): Peripheral? {
     val selectedPeripheral = getFirstPeripheralWithAdbOrThrow()
     val configType = selectedPeripheral.getUsbConfigType()
-    if(configType.contains("accessory")) {
+    if (configType.contains("accessory")) {
         println("Device is already in Accessory Mode.")
         return selectedPeripheral
     }
     setupAccessoryMode(selectedPeripheral)
     sleep(1.seconds.inWholeSeconds.toUInt())
     selectedPeripheral.getUsbConfigType().let {
-        if(it.contains("accessory")) {
+        if (it.contains("accessory")) {
             println("Device successfully switched to Accessory Mode.")
             return selectedPeripheral
         } else {
@@ -193,7 +177,7 @@ private fun UsbSession.deviceInAccessoryModeOrNull(): Peripheral? {
 }
 
 private fun Peripheral.installAccessoryAppOrThrow() {
-    if(isAppInstalled()) {
+    if (isAppInstalled()) {
         println("Accessory app is already installed.")
         return
     }
@@ -206,7 +190,7 @@ private fun Peripheral.installAccessoryAppOrThrow() {
             throw AppNotInstalledException(
                 bundleId = BUNDLE_ID,
                 message = "App installation command executed but the app is not detected as installed afterwards.",
-                cause = null
+                cause = null,
             )
         }
     } catch (error: AppNotInstalledException) {
@@ -215,7 +199,7 @@ private fun Peripheral.installAccessoryAppOrThrow() {
         throw AppNotInstalledException(
             bundleId = BUNDLE_ID,
             message = "Failed to install the accessory app",
-            cause = cause
+            cause = cause,
         )
     }
 }
@@ -243,22 +227,29 @@ private fun Peripheral.purge() {
 
 private fun Session.run() {
     if (runAsMicrophoneMode) {
-        run(type = StreamingType.ClientToHost(
-            audioInterface = audioInterfaceName,
-            useFakeAudioInput = useFakeAudioInput,
-        ))
+        run(
+            type =
+                StreamingType.ClientToHost(
+                    audioInterface = audioInterfaceName,
+                    useFakeAudioInput = useFakeAudioInput,
+                ),
+        )
     } else {
-        run(type = StreamingType.HostToClient(
-            audioInterface = audioInterfaceName,
-            useFakeAudioInput = useFakeAudioInput,
-        ))
+        run(
+            type =
+                StreamingType.HostToClient(
+                    audioInterface = audioInterfaceName,
+                    useFakeAudioInput = useFakeAudioInput,
+                ),
+        )
     }
 }
 
 private fun Session.run(type: StreamingType) {
-    runSession {
-        val peripheral = deviceInAccessoryModeOrNull()
-            ?: throw IllegalStateException("No device in Accessory Mode available.")
+    UsbInteropImpl.runSession {
+        val peripheral =
+            deviceInAccessoryModeOrNull()
+                ?: throw IllegalStateException("No device in Accessory Mode available.")
         if (hasSkipAppInstallParameter) {
             println("Skipping app installation")
         } else {

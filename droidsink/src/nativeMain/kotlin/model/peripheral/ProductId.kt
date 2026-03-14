@@ -1,9 +1,9 @@
 package model.peripheral
 
-import kotlin.text.toUShort
+internal value class ProductId(
+    val id: String,
+)
 
-value class ProductId(val id: String)
+internal fun UShort.toProductId(): ProductId = ProductId(this.toString())
 
-
-fun UShort.toProductId(): ProductId = ProductId(this.toString())
-fun ProductId.toUShort(): UShort = id.toUShort()
+internal fun ProductId.toUShort(): UShort = id.toUShort()

@@ -1,6 +1,6 @@
 package model.command
 
-fun printHelp() {
+internal fun printHelp() {
     println("Available commands:")
     allCommands.forEach { command ->
         println("   ${command.name}: ${command.description}")

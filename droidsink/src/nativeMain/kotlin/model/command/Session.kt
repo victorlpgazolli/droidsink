@@ -1,8 +1,9 @@
 package model.command
 
-interface Session {
+public interface Session {
     val hasSkipAppInstallParameter: Boolean
     val audioInterfaceName: String
     val runAsMicrophoneMode: Boolean
     val useFakeAudioInput: Boolean
+    val selectedSerialNumber: String?
 }

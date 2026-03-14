@@ -7,7 +7,7 @@ import model.command.exceptions.InvalidCommandException
 import model.command.exceptions.NoDeviceWithAdbFoundException
 import model.command.exceptions.RequiredSoftwareNotFoundException
 
-inline fun runCatching(block: () -> Unit) {
+internal inline fun runCatching(block: () -> Unit) {
     try {
         block()
     } catch (_: InvalidCommandException) {
@@ -23,8 +23,11 @@ inline fun runCatching(block: () -> Unit) {
         println("Please connect a compatible device and try again.")
     } catch (error: AudioInterfaceNotFoundException) {
         println(error.message)
-        println("Please check if you have installed in your system, if the interface name is correct. \nSpecify the interface name in quotes if it contains spaces, example: --audio-interface \"$DEFAULT_AUDIO_DEVICE_NAME\"".trimMargin())
-        if(error.partialMatches.isNotEmpty()) {
+        println(
+            "Please check if you have installed in your system, if the interface name is correct. \nSpecify the interface name in quotes if it contains spaces, example: --audio-interface \"$DEFAULT_AUDIO_DEVICE_NAME\""
+                .trimMargin(),
+        )
+        if (error.partialMatches.isNotEmpty()) {
             println("Partial matches found:")
             error.partialMatches.forEach { println("   $it") }
         }

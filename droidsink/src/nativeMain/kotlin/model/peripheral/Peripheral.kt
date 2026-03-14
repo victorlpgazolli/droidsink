@@ -1,8 +1,8 @@
 package model.peripheral
 
-data class Peripheral(
+internal data class Peripheral(
     val name: String,
     val serialNumber: String,
     val vendorId: VendorId,
-    val productId: ProductId
+    val productId: ProductId,
 )

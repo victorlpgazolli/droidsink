@@ -2,7 +2,12 @@ package dev.victorlpgazolli.mobilesink
 
 import LOG_TAG
 import android.Manifest.permission.RECORD_AUDIO
-import android.app.*
+import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -15,6 +20,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 
 class AccessoryService : Service() {
@@ -45,18 +51,16 @@ class AccessoryService : Service() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate() {
         super.onCreate()
         usbManager = getSystemService(USB_SERVICE) as UsbManager
         val intentFilter = IntentFilter("dev.victorlpgazolli.mobilesink.USB_PERMISSION")
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(usbReceiver, intentFilter, RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(usbReceiver, intentFilter)
-        }
+        registerReceiver(usbReceiver, intentFilter, RECEIVER_NOT_EXPORTED)
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
         val canUseMic = ContextCompat.checkSelfPermission(this, RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -108,6 +112,7 @@ class AccessoryService : Service() {
         val hasMicPermission = ContextCompat.checkSelfPermission(this, RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         startPlayback(accessory, hasMicPermission)
     }
+    @SuppressLint("MissingPermission")
     private fun startPlayback(accessory: UsbAccessory, canUseMic: Boolean) {
         Log.i(LOG_TAG, "Starting playback for accessory: ${accessory.model}")
         fileDescriptor = usbManager?.openAccessory(accessory) ?: return
@@ -130,6 +135,7 @@ class AccessoryService : Service() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun buildNotification(): Notification = Notification.Builder(this, CHANNEL_ID)
         .setContentTitle("Audio Bridge").setSmallIcon(android.R.drawable.ic_media_play).setOngoing(true).build()
 

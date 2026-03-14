@@ -5,7 +5,7 @@ import GOOGLE_VID
 import model.peripheral.Peripheral
 import model.streaming.StreamingType
 
-interface UsbSession {
+internal interface UsbSession {
     fun listAccessories(): List<Peripheral>
     fun setupAccessoryMode(peripheral: Peripheral)
     fun getAccessoryInfo(peripheral: Peripheral): Peripheral?

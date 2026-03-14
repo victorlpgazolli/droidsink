@@ -9,7 +9,7 @@ import libusb.libusb_get_port_numbers
 import model.usb.UsbPhysicalId
 
 @OptIn(ExperimentalForeignApi::class)
-typealias CPointerDevice = CPointer<libusb_device>
+internal typealias CPointerDevice = CPointer<libusb_device>
 
 @OptIn(ExperimentalForeignApi::class)
 internal fun CPointerDevice.getPhysicalId(): UsbPhysicalId {
@@ -20,6 +20,6 @@ internal fun CPointerDevice.getPhysicalId(): UsbPhysicalId {
 
     return UsbPhysicalId(
         bus = bus,
-        portPath = ports.take(depth).map { it.toInt() }
+        portPath = ports.take(depth).map { it.toInt() },
     )
 }
