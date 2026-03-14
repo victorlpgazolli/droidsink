@@ -51,12 +51,6 @@ kotlin {
                 entryPoint = "main"
                 if (hostOs == "Mac OS X") {
                     linkerOpts("-L/opt/homebrew/opt/libusb/lib", "-lusb-1.0")
-                    freeCompilerArgs += listOf(
-                        "-linker-options", "-macosx_version_min 15.0",
-                        "-linker-options", "-framework IOKit",
-                        "-linker-options", "-framework CoreFoundation",
-                        "-linker-options", "-framework Security"
-                    )
                 } else if (hostOs == "Linux") {
                     val arch = if (isArm64) "aarch64" else "x86_64"
                     linkerOpts("-L/usr/lib/$arch-linux-gnu", "-lusb-1.0")
