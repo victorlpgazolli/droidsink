@@ -21,11 +21,11 @@ kotlin {
     val isArm64 = System.getProperty("os.arch") == "aarch64"
     val isMingwX64 = hostOs.startsWith("Windows")
     val nativeTarget = when {
-        hostOs == "Mac OS X" && isArm64 -> macosArm64("native")
-        hostOs == "Mac OS X" && !isArm64 -> macosX64("native")
-        hostOs == "Linux" && isArm64 -> linuxArm64("native")
-        hostOs == "Linux" && !isArm64 -> linuxX64("native")
-        isMingwX64 -> mingwX64("native")
+        hostOs == "Mac OS X" && isArm64 -> macosArm64()
+        hostOs == "Mac OS X" && !isArm64 -> macosX64()
+        hostOs == "Linux" && isArm64 -> linuxArm64()
+        hostOs == "Linux" && !isArm64 -> linuxX64()
+        isMingwX64 -> mingwX64()
         else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
     }
 
@@ -59,7 +59,7 @@ kotlin {
         }
         compilations.getByName("main") {
             val libusb by cinterops.creating {
-                definitionFile.set(project.file("src/nativeInterop/cinterop/libusb.def"))
+                definitionFile.set(project.file("src/nativeMain/cinterop/libusb.def"))
                 if (hostOs == "Mac OS X") {
                     includeDirs("/opt/homebrew/include/libusb-1.0", "/opt/homebrew/include")
                     compilerOpts("-I/opt/homebrew/include/libusb-1.0")
