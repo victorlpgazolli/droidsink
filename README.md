@@ -22,22 +22,27 @@ The project consists of two parts:
 
 Available commands:
    install: Install the accessory app on the connected device.
+       --serial: Select the device with the specified serial number. (default: null)
 
    start: Start the accessory service on the connected device.
        --skip-app-install: Skip the installation of the .apk on the connected device. (default: false)
+       --serial: Select the device with the specified serial number. (default: null)
 
    stop: Stop the accessory service on the connected device.
        --skip-app-install: Skip the installation of the .apk on the connected device. (default: false)
+       --serial: Select the device with the specified serial number. (default: null)
 
    run: Install the app, start the service, and begin streaming data.
        --skip-app-install: Skip the installation of the .apk on the connected device. (default: false)
        --audio-interface: Specify the name of the audio interface to use for streaming. (default: "BlackHole 2ch")
        --run-as-microphone: Run the application in microphone mode, which configures the device to provide audio data as if it were a microphone peripheral. (default: false)
        --use-fake-audio-input: Use a fake audio input stream that generates some audio data instead of reading from the host. This is useful for testing the application without needing to have an actual audio input device connected. (default: false)
+       --serial: Select the device with the specified serial number. (default: null)
 
    devices: List all connected devices and their statuses.
 
    purge: Uninstall the app from the connected device, clear its data, and remove the downloaded APK from local storage.
+       --serial: Select the device with the specified serial number. (default: null)
 
    version: Print the current version of this application.
 ```

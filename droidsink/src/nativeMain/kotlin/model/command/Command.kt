@@ -46,7 +46,7 @@ internal sealed class Parameter(
     object UseSpecificSerialNumber : Parameter(
         name = "--serial",
         description = "Select the device with the specified serial number.",
-        defaultValue = "false",
+        defaultValue = "null",
     )
 }
 
