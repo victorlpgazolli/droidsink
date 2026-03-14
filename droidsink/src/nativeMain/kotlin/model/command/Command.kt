@@ -42,6 +42,12 @@ internal sealed class Parameter(
         description = "Use a fake audio input stream that generates some audio data instead of reading from the host. This is useful for testing the application without needing to have an actual audio input device connected.",
         defaultValue = "false",
     )
+
+    object UseSpecificSerialNumber : Parameter(
+        name = "--serial",
+        description = "Select the device with the specified serial number.",
+        defaultValue = "false",
+    )
 }
 
 internal interface Command {
@@ -55,21 +61,24 @@ internal sealed class PrintableCommand : Command {
     data class Install(
         override val name: String = "install",
         override val description: String = "Install the accessory app on the connected device.",
-        override val parameters: List<Parameter> = emptyList(),
+        override val parameters: List<Parameter> =
+            listOf(
+                Parameter.UseSpecificSerialNumber,
+            ),
         override val requirements: List<Requirement> = listOf(Requirement.Adb, Requirement.Wget),
     ) : PrintableCommand()
 
     data class Start(
         override val name: String = "start",
         override val description: String = "Start the accessory service on the connected device.",
-        override val parameters: List<Parameter> = listOf(Parameter.SkipAppInstall),
+        override val parameters: List<Parameter> = listOf(Parameter.SkipAppInstall, Parameter.UseSpecificSerialNumber),
         override val requirements: List<Requirement> = listOf(Requirement.Adb, Requirement.Wget),
     ) : PrintableCommand()
 
     data class Stop(
         override val name: String = "stop",
         override val description: String = "Stop the accessory service on the connected device.",
-        override val parameters: List<Parameter> = listOf(Parameter.SkipAppInstall),
+        override val parameters: List<Parameter> = listOf(Parameter.SkipAppInstall, Parameter.UseSpecificSerialNumber),
         override val requirements: List<Requirement> = listOf(Requirement.Adb, Requirement.Wget),
     ) : PrintableCommand()
 
@@ -77,7 +86,13 @@ internal sealed class PrintableCommand : Command {
         override val name: String = "run",
         override val description: String = "Install the app, start the service, and begin streaming data.",
         override val parameters: List<Parameter> =
-            listOf(Parameter.SkipAppInstall, Parameter.AudioInterface, Parameter.MicrophoneMode, Parameter.UseFakeAudioInput),
+            listOf(
+                Parameter.SkipAppInstall,
+                Parameter.AudioInterface,
+                Parameter.MicrophoneMode,
+                Parameter.UseFakeAudioInput,
+                Parameter.UseSpecificSerialNumber,
+            ),
         override val requirements: List<Requirement> = listOf(Requirement.Adb, Requirement.AudioDevice, Requirement.Sox, Requirement.Wget),
     ) : PrintableCommand()
 
@@ -91,7 +106,10 @@ internal sealed class PrintableCommand : Command {
     data class Purge(
         override val name: String = "purge",
         override val description: String = "Uninstall the app from the connected device, clear its data, and remove the downloaded APK from local storage.",
-        override val parameters: List<Parameter> = emptyList(),
+        override val parameters: List<Parameter> =
+            listOf(
+                Parameter.UseSpecificSerialNumber,
+            ),
         override val requirements: List<Requirement> = listOf(Requirement.Adb),
     ) : PrintableCommand()
 

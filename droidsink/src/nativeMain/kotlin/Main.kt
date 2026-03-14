@@ -30,11 +30,11 @@ public fun main(args: Array<String>) =
         when (command) {
             is PrintableCommand.Version -> println(APP_VERSION)
             is PrintableCommand.Install -> session.installApp()
-            is PrintableCommand.Start -> getFirstPeripheralWithAdbOrThrow().startService()
-            is PrintableCommand.Stop -> getFirstPeripheralWithAdbOrThrow().stop()
+            is PrintableCommand.Start -> session.getPeripheralWithAdbOrThrow().startService()
+            is PrintableCommand.Stop -> session.getPeripheralWithAdbOrThrow().stop()
             is PrintableCommand.Run -> session.run()
             is PrintableCommand.Devices -> printAllPeripherals()
-            is PrintableCommand.Purge -> getFirstPeripheralWithAdbOrThrow().purge()
+            is PrintableCommand.Purge -> session.getPeripheralWithAdbOrThrow().purge()
             else -> throw InvalidCommandException
         }
     }
@@ -44,7 +44,7 @@ private fun Session.installApp() {
         println("Skipping app installation as ${Parameter.SkipAppInstall.name} parameter is present.")
         return
     }
-    getFirstPeripheralWithAdbOrThrow().installAccessoryAppOrThrow()
+    getPeripheralWithAdbOrThrow().installAccessoryAppOrThrow()
 }
 
 private fun Peripheral.stop() {
@@ -119,7 +119,26 @@ private fun Peripheral.startService() {
     adb("shell am start-foreground-service -n $BUNDLE_ID/.AccessoryService")
 }
 
-private fun getFirstPeripheralWithAdbOrThrow(): Peripheral = UsbInteropImpl.runSession { getFirstPeripheralWithAdbOrThrow() }
+private fun Session.getPeripheralWithAdbOrThrow(): Peripheral =
+    UsbInteropImpl
+        .runSession {
+            selectedSerialNumber?.let { getPeripheralBySerialNumberOrThrow(it) }
+                ?: getFirstPeripheralWithAdbOrThrow()
+        }.also {
+            it.printSelectedPeripheral()
+        }
+
+private fun UsbSession.getPeripheralBySerialNumberOrThrow(selectedSerialNumber: String): Peripheral =
+    listAccessories()
+        .find {
+            it.serialNumber == selectedSerialNumber
+        } ?: throw NoDeviceWithAdbFoundException(selectedSerialNumber = selectedSerialNumber)
+
+private fun Peripheral.printSelectedPeripheral() {
+    println(
+        "Selected Peripheral: $name (VID: $vendorId, PID: $productId, Serial: $serialNumber), configType: ${getUsbConfigType()}",
+    )
+}
 
 private fun UsbSession.getFirstPeripheralWithAdbOrThrow(): Peripheral {
     val selectedPeripherals = listAccessories().filter { it.hasAdb() }
@@ -134,11 +153,7 @@ private fun UsbSession.getFirstPeripheralWithAdbOrThrow(): Peripheral {
     if (selectedPeripherals.size > 1) {
         println("Multiple connected accessories with ADB found. Selecting the first one: ${selectedPeripheral.name}")
     }
-    return selectedPeripheral.also {
-        println(
-            "Selected Peripheral: ${it.name} (VID: ${it.vendorId}, PID: ${it.productId}, Serial: ${it.serialNumber}), configType: ${it.getUsbConfigType()}",
-        )
-    }
+    return selectedPeripheral
 }
 
 private fun UsbSession.deviceInAccessoryModeOrNull(): Peripheral? {

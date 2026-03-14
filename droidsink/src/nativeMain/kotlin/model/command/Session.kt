@@ -5,4 +5,5 @@ public interface Session {
     val audioInterfaceName: String
     val runAsMicrophoneMode: Boolean
     val useFakeAudioInput: Boolean
+    val selectedSerialNumber: String?
 }
