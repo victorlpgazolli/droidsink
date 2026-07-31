@@ -12,33 +12,34 @@
     <application
         android:allowBackup="true"
         android:label="DroidSink"
-        android:theme="@android:style/Theme.NoDisplay"> <activity
-        android:name=".MainActivity"
-        android:exported="true">
-        <intent-filter>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent-filter>
+        android:theme="@style/Theme.DroidSink">
 
-        <intent-filter>
-            <action android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED" />
-        </intent-filter>
-
-        <meta-data
-            android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
-            android:resource="@xml/accessory_filter" />
-    </activity>
-
-        <service
-            android:name=".AccessoryService"
-            android:enabled="true"
+        <activity
+            android:name="dev.victorlpgazolli.mobilesink.MainActivity"
             android:exported="true"
-            android:foregroundServiceType="microphone|mediaPlayback">
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
 
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED" />
             </intent-filter>
 
+            <meta-data
+                android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
+                android:resource="@xml/accessory_filter" />
+        </activity>
+
+        <service
+            android:name="dev.victorlpgazolli.mobilesink.AccessoryService"
+            android:enabled="true"
+            android:exported="true"
+            android:foregroundServiceType="microphone|mediaPlayback">
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED" />
+            </intent-filter>
             <meta-data
                 android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
                 android:resource="@xml/accessory_filter" />
