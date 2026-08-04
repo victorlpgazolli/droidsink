@@ -16,14 +16,22 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.hardware.usb.UsbAccessory
 import android.hardware.usb.UsbManager
+import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.flow.StateFlow
 
 class AccessoryService : Service() {
+
+    inner class LocalBinder : Binder() {
+        fun getService(): AccessoryService = this@AccessoryService
+    }
+
+    private val binder = LocalBinder()
 
     companion object {
         private const val ACTION_USB_PERMISSION = "dev.victorlpgazolli.mobilesink.USB_PERMISSION"
@@ -37,15 +45,21 @@ class AccessoryService : Service() {
     private val audioOutputService = AudioOutputService()
     private val audioInputService = AudioInputService()
 
+    val powerLevel: StateFlow<StereoPower> = audioOutputService.powerLevel
+    val throughputBps: StateFlow<Long> = audioOutputService.throughputBps
+
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (ACTION_USB_PERMISSION == intent.action) {
-                val accessory =
-                    intent.getParcelableExtra<UsbAccessory>(UsbManager.EXTRA_ACCESSORY)
-                        ?: usbManager?.accessoryList?.firstOrNull()
-                        ?: return
-                if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                    startPlayback(accessory)
+            when (intent.action) {
+                ACTION_USB_PERMISSION -> {
+                    val accessory = intent.getParcelableExtra<UsbAccessory>(UsbManager.EXTRA_ACCESSORY)
+                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                        accessory?.let { startPlayback(it) }
+                    }
+                }
+                UsbManager.ACTION_USB_ACCESSORY_DETACHED -> {
+                    Log.i(LOG_TAG, "USB Accessory detached. Stopping service.")
+                    stopSelf()
                 }
             }
         }
@@ -55,8 +69,10 @@ class AccessoryService : Service() {
     override fun onCreate() {
         super.onCreate()
         usbManager = getSystemService(USB_SERVICE) as UsbManager
-        val intentFilter = IntentFilter("dev.victorlpgazolli.mobilesink.USB_PERMISSION")
-
+        val intentFilter = IntentFilter().apply {
+            addAction(ACTION_USB_PERMISSION)
+            addAction(UsbManager.ACTION_USB_ACCESSORY_DETACHED)
+        }
         registerReceiver(usbReceiver, intentFilter, RECEIVER_NOT_EXPORTED)
     }
 
@@ -68,10 +84,7 @@ class AccessoryService : Service() {
         var serviceType = 0
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             serviceType = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-
-            if (canUseMic) {
-                serviceType = serviceType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            }
+            if (canUseMic) serviceType = serviceType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         }
 
         try {
@@ -81,49 +94,35 @@ class AccessoryService : Service() {
                 startForeground(NOTIFICATION_ID, buildNotification())
             }
         } catch (e: Exception) {
-            Log.e("AOA_Audio", "Falha crítica ao iniciar serviço: ${e.message}")
             stopSelf()
             return START_NOT_STICKY
         }
-        val accessory =
-            intent?.getParcelableExtra<UsbAccessory>(UsbManager.EXTRA_ACCESSORY)
-                ?: usbManager?.accessoryList?.firstOrNull()
-                ?: return START_NOT_STICKY
 
-        if (usbManager?.hasPermission(accessory) == true) {
-            startPlayback(accessory, canUseMic)
-        } else {
-            val permissionIntent = Intent(ACTION_USB_PERMISSION).apply {
-                setPackage(packageName)
+        val accessory = intent?.getParcelableExtra<UsbAccessory>(UsbManager.EXTRA_ACCESSORY)
+            ?: usbManager?.accessoryList?.firstOrNull()
+
+        if (accessory != null) {
+            if (usbManager?.hasPermission(accessory) == true) {
+                startPlayback(accessory, canUseMic)
+            } else {
+                val permissionIntent = Intent(ACTION_USB_PERMISSION).apply {
+                    setPackage(packageName)
+                }
+                val pi = PendingIntent.getBroadcast(this, 0, permissionIntent, PendingIntent.FLAG_IMMUTABLE)
+                usbManager?.requestPermission(accessory, pi)
             }
-
-            val pi = PendingIntent.getBroadcast(
-                this,
-                0,
-                permissionIntent,
-                PendingIntent.FLAG_IMMUTABLE
-            )
-
-            usbManager?.requestPermission(accessory, pi)
         }
         return START_STICKY
     }
-    private fun startPlayback(accessory: UsbAccessory) {
-        val hasMicPermission = ContextCompat.checkSelfPermission(this, RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        startPlayback(accessory, hasMicPermission)
-    }
+
     @SuppressLint("MissingPermission")
-    private fun startPlayback(accessory: UsbAccessory, canUseMic: Boolean) {
-        Log.i(LOG_TAG, "Starting playback for accessory: ${accessory.model}")
+    private fun startPlayback(accessory: UsbAccessory, canUseMic: Boolean = false) {
+        if (fileDescriptor != null) return // Already playing
+        
         fileDescriptor = usbManager?.openAccessory(accessory) ?: return
-        Log.i(LOG_TAG, "File descriptor obtained: ${fileDescriptor?.fileDescriptor}")
         fileDescriptor?.let {
             audioOutputService.startRecording(it)
-            if (canUseMic) {
-                audioInputService.startRecording(it)
-            } else {
-                Log.w(LOG_TAG, "Microphone permission not granted, audio input will be disabled")
-            }
+            if (canUseMic) audioInputService.startRecording(it)
         }
     }
 
@@ -137,9 +136,14 @@ class AccessoryService : Service() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun buildNotification(): Notification = Notification.Builder(this, CHANNEL_ID)
-        .setContentTitle("Audio Bridge").setSmallIcon(android.R.drawable.ic_media_play).setOngoing(true).build()
+        .setContentTitle("DroidSink")
+        .setContentText("Audio Bridge Active")
+        .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+        .setOngoing(true)
+        .build()
 
     override fun onDestroy() {
+        unregisterReceiver(usbReceiver)
         fileDescriptor?.close()
         fileDescriptor = null
         audioOutputService.stopRecording()
@@ -147,5 +151,5 @@ class AccessoryService : Service() {
         super.onDestroy()
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(intent: Intent?): IBinder = binder
 }

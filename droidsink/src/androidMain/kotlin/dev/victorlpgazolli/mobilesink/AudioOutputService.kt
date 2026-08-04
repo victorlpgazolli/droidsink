@@ -1,6 +1,5 @@
 package dev.victorlpgazolli.mobilesink
 
-
 import ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR
 import BITS_PER_SAMPLE
 import CHANNELS
@@ -14,27 +13,47 @@ import android.os.ParcelFileDescriptor
 import android.os.Process.THREAD_PRIORITY_URGENT_AUDIO
 import android.os.Process.setThreadPriority
 import android.util.Log
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.FileInputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import kotlin.concurrent.Volatile
+import kotlin.math.log10
+import kotlin.math.sqrt
+import kotlin.time.Duration.Companion.seconds
+
+data class StereoPower(val left: Float, val right: Float)
 
 class AudioOutputService : AudioSource {
 
     private var playbackThread: Thread? = null
+    private var monitorThread: Thread? = null
+
+    private val _powerLevel = MutableStateFlow(StereoPower(0f, 0f))
+    val powerLevel: StateFlow<StereoPower> = _powerLevel.asStateFlow()
+
+    private val _throughputBps = MutableStateFlow(0L)
+    val throughputBps: StateFlow<Long> = _throughputBps.asStateFlow()
+    @Volatile
+    var lastSecondTime: Long? = null
+
+    private var lastL = 0f
+    private var lastR = 0f
 
     override fun startRecording(fileDescriptor: ParcelFileDescriptor) {
         if (playbackThread != null) return
 
+        startMonitorThread()
+
         playbackThread = Thread {
-            Log.i(LOG_TAG, "Starting audio output service with fd: ${fileDescriptor.fileDescriptor}")
+            Log.i(LOG_TAG, "AudioOutputService: Monitoring started with enhanced sensitivity")
             setThreadPriority(THREAD_PRIORITY_URGENT_AUDIO)
+            
             val frameBytes = (BITS_PER_SAMPLE / 8) * CHANNELS
             val chunkSize = FRAMES_PER_CHUNK * frameBytes
-            val minBufferSize = AudioTrack.getMinBufferSize(
-                SAMPLE_RATE,
-                AudioFormat.CHANNEL_OUT_STEREO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-
-            val bufferSizeInBytes = maxOf(minBufferSize, chunkSize * ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR)
+            val buffer = ByteArray(chunkSize)
 
             val audioTrack = AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder()
@@ -47,43 +66,119 @@ class AudioOutputService : AudioSource {
                     .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                     .build())
                 .setTransferMode(AudioTrack.MODE_STREAM)
-                .setBufferSizeInBytes(bufferSizeInBytes)
+                .setBufferSizeInBytes(maxOf(
+                    AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT),
+                    chunkSize * ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR
+                ))
                 .build()
 
-
             val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
-            val tempBuffer = ByteArray(chunkSize)
+            
+            var bytesInSecond = 0L
+            lastSecondTime = System.currentTimeMillis()
+
             try {
                 audioTrack.play()
-
                 while (!Thread.interrupted()) {
-                    var total = 0
-                    while (total < chunkSize) {
-                        val r = inputStream.read(tempBuffer, total, chunkSize - total)
+                    var bytesRead = 0
+                    while (bytesRead < chunkSize) {
+                        val r = inputStream.read(buffer, bytesRead, chunkSize - bytesRead)
                         if (r <= 0) break
-                        total += r
+                        bytesRead += r
                     }
 
-                    if (total == chunkSize) {
-                        audioTrack.write(tempBuffer, 0, total)
+                    if (bytesRead == chunkSize) {
+                        updatePowerLevel(buffer)
+                        audioTrack.write(buffer, 0, bytesRead)
+                        
+                        bytesInSecond += bytesRead
+                        val currentTime = System.currentTimeMillis()
+                        lastSecondTime?.let {
+                            if (currentTime - it >= 1.seconds.inWholeMilliseconds) {
+                                _throughputBps.value = bytesInSecond
+                                bytesInSecond = 0
+                                lastSecondTime = currentTime
+                            }
+                        } ?: run {
+                            lastSecondTime = currentTime
+                        }
+                    } else if (bytesRead == 0) {
+                        _powerLevel.value = StereoPower(0f, 0f)
+                        _throughputBps.value = 0
                     }
                 }
             } catch (e: Exception) {
-                Log.e(LOG_TAG, "Streaming error: ${e.message}")
+                Log.e(LOG_TAG, "Playback error: ${e.message}")
             } finally {
-                audioTrack.stop()
+                try { audioTrack.stop() } catch (e: Exception) {}
                 audioTrack.release()
-                fileDescriptor.close()
+                try { fileDescriptor.close() } catch (e: Exception) {}
                 playbackThread = null
+                _powerLevel.value = StereoPower(0f, 0f)
+                _throughputBps.value = 0
             }
         }
         playbackThread?.start()
     }
-    override fun stopRecording() {
-        if (playbackThread != null) {
-            playbackThread?.interrupt()
-            playbackThread = null
+
+    private fun updatePowerLevel(buffer: ByteArray) {
+        val shorts = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        var sumL = 0.0
+        var sumR = 0.0
+        val count = shorts.capacity()
+        
+        for (i in 0 until count step 2) {
+            val l = shorts.get(i).toDouble()
+            sumL += l * l
+            if (i + 1 < count) {
+                val r = shorts.get(i + 1).toDouble()
+                sumR += r * r
+            }
         }
+        
+        val rmsL = sqrt(sumL / (count / 2))
+        val rmsR = sqrt(sumR / (count / 2))
+        
+        val dbL = if (rmsL > 0.01) 20 * log10(rmsL / 32767.0) else -65.0
+        val dbR = if (rmsR > 0.01) 20 * log10(rmsR / 32767.0) else -65.0
+        
+        var targetL = ((dbL + 65.0) / 65.0 * 100.0).toFloat().coerceIn(0f, 100f)
+        var targetR = ((dbR + 65.0) / 65.0 * 100.0).toFloat().coerceIn(0f, 100f)
+
+        if (targetL < lastL) targetL = lastL * 0.85f + targetL * 0.15f
+        if (targetR < lastR) targetR = lastR * 0.85f + targetR * 0.15f
+        
+        lastL = targetL
+        lastR = targetR
+        
+        _powerLevel.value = StereoPower(targetL, targetR)
     }
 
+    private fun startMonitorThread() {
+        monitorThread = Thread {
+            while (!Thread.interrupted()) {
+                try {
+                    Thread.sleep(1.seconds.inWholeMilliseconds)
+                    lastSecondTime ?: continue
+
+                    val hasStoppedUpdating = System.currentTimeMillis() - lastSecondTime!! >= 1.seconds.inWholeMilliseconds
+                    if (hasStoppedUpdating) {
+                        lastL = 0f
+                        lastR = 0f
+                        _powerLevel.value = StereoPower(0f, 0f)
+                        _throughputBps.value = 0
+                        lastSecondTime = null
+                    }
+                } catch (e: InterruptedException) {
+                    break
+                }
+            }
+        }
+        monitorThread?.start()
+    }
+
+    override fun stopRecording() {
+        playbackThread?.interrupt()
+        playbackThread = null
+    }
 }

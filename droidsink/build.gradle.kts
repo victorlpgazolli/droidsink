@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlinxSerialization)
     alias(libs.plugins.androidApplication)
+    alias(libs.plugins.compose.compiler)
 }
 
 group = "dev.victorlpgazolli.mobilesink"
@@ -13,6 +14,7 @@ version = "1.1.0"
 
 repositories {
     mavenCentral()
+    google()
 }
 
 kotlin {
@@ -42,6 +44,15 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.kotlin.stdlib)
             implementation(libs.androidx.core.ktx)
+            implementation(libs.androidx.appcompat)
+            implementation(libs.google.material)
+            
+            val composeBom = project.dependencies.platform(libs.androidx.compose.bom)
+            implementation(composeBom)
+            implementation(libs.androidx.compose.ui)
+            implementation(libs.androidx.compose.ui.tooling.preview)
+            implementation(libs.androidx.compose.material3)
+            implementation(libs.androidx.activity.compose)
         }
     }
 
@@ -120,5 +131,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+    }
+    buildFeatures {
+        compose = true
     }
 }
