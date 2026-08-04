@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -170,7 +171,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 fun MainDashboard(
     power: StereoPower,
@@ -179,40 +179,41 @@ fun MainDashboard(
     isServiceRunning: Boolean,
     onToggleService: () -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        // VU Meter remains as the dynamic background
-        VUMeterScreen(power)
-
-        // Dashboard Overlay
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 64.dp, start = 24.dp, end = 24.dp),
-            horizontalAlignment = Alignment.Start
+                .weight(1f)
+                .fillMaxHeight(),
+            verticalArrangement = Arrangement.Center
         ) {
             Text(
                 text = "DroidSink Dash",
                 color = Color.White,
-                fontSize = 24.sp,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = FontFamily.Monospace
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            
+            Spacer(modifier = Modifier.height(32.dp))
+
             StatusInfoRow(
                 label = "Accessory Mode",
                 value = if (isAccessoryMode) "ACTIVE" else "NOT FOUND",
                 color = if (isAccessoryMode) Color(0xFF00E676) else Color(0xFFFF1744)
             )
-            
+
             StatusInfoRow(
                 label = "Throughput",
                 value = formatBytesPerSecond(throughput),
                 color = Color(0xFF00B0FF)
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
-            
+            Spacer(modifier = Modifier.height(48.dp))
+
             Button(
                 onClick = onToggleService,
                 colors = ButtonDefaults.buttonColors(
@@ -228,6 +229,15 @@ fun MainDashboard(
                     fontSize = 14.sp
                 )
             }
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            contentAlignment = Alignment.Center
+        ) {
+            VUMeterScreen(power)
         }
     }
 }
@@ -247,11 +257,8 @@ fun formatBytesPerSecond(bytes: Long): String {
         else -> "$bytes B/s"
     }
 }
-
 @Composable
 fun VUMeterScreen(power: StereoPower) {
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     val animatedLeft by animateFloatAsState(
         targetValue = power.left,
@@ -264,29 +271,12 @@ fun VUMeterScreen(power: StereoPower) {
         label = "vuRight"
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.SpaceEvenly
     ) {
-        if (isLandscape) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 80.dp),
-                verticalArrangement = Arrangement.SpaceEvenly
-            ) {
-                VUBar(animatedLeft, isVertical = false, modifier = Modifier.weight(1f))
-                VUBar(animatedRight, isVertical = false, modifier = Modifier.weight(1f))
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp, vertical = 200.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                VUBar(animatedLeft, isVertical = true, modifier = Modifier.weight(1f))
-                VUBar(animatedRight, isVertical = true, modifier = Modifier.weight(1f))
-            }
-        }
+        VUBar(animatedLeft, isVertical = true, modifier = Modifier.weight(1f))
+        VUBar(animatedRight, isVertical = true, modifier = Modifier.weight(1f))
     }
 }
 

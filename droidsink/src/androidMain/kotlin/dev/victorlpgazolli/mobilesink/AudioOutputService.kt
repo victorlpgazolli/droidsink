@@ -19,25 +19,33 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.concurrent.Volatile
 import kotlin.math.log10
 import kotlin.math.sqrt
+import kotlin.time.Duration.Companion.seconds
 
 data class StereoPower(val left: Float, val right: Float)
 
 class AudioOutputService : AudioSource {
 
     private var playbackThread: Thread? = null
+    private var monitorThread: Thread? = null
+
     private val _powerLevel = MutableStateFlow(StereoPower(0f, 0f))
     val powerLevel: StateFlow<StereoPower> = _powerLevel.asStateFlow()
 
     private val _throughputBps = MutableStateFlow(0L)
     val throughputBps: StateFlow<Long> = _throughputBps.asStateFlow()
+    @Volatile
+    var lastSecondTime: Long? = null
 
     private var lastL = 0f
     private var lastR = 0f
 
     override fun startRecording(fileDescriptor: ParcelFileDescriptor) {
         if (playbackThread != null) return
+
+        startMonitorThread()
 
         playbackThread = Thread {
             Log.i(LOG_TAG, "AudioOutputService: Monitoring started with enhanced sensitivity")
@@ -67,7 +75,7 @@ class AudioOutputService : AudioSource {
             val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
             
             var bytesInSecond = 0L
-            var lastSecondTime = System.currentTimeMillis()
+            lastSecondTime = System.currentTimeMillis()
 
             try {
                 audioTrack.play()
@@ -85,9 +93,13 @@ class AudioOutputService : AudioSource {
                         
                         bytesInSecond += bytesRead
                         val currentTime = System.currentTimeMillis()
-                        if (currentTime - lastSecondTime >= 1000) {
-                            _throughputBps.value = bytesInSecond
-                            bytesInSecond = 0
+                        lastSecondTime?.let {
+                            if (currentTime - it >= 1.seconds.inWholeMilliseconds) {
+                                _throughputBps.value = bytesInSecond
+                                bytesInSecond = 0
+                                lastSecondTime = currentTime
+                            }
+                        } ?: run {
                             lastSecondTime = currentTime
                         }
                     } else if (bytesRead == 0) {
@@ -140,6 +152,29 @@ class AudioOutputService : AudioSource {
         lastR = targetR
         
         _powerLevel.value = StereoPower(targetL, targetR)
+    }
+
+    private fun startMonitorThread() {
+        monitorThread = Thread {
+            while (!Thread.interrupted()) {
+                try {
+                    Thread.sleep(1.seconds.inWholeMilliseconds)
+                    lastSecondTime ?: continue
+
+                    val hasStoppedUpdating = System.currentTimeMillis() - lastSecondTime!! >= 1.seconds.inWholeMilliseconds
+                    if (hasStoppedUpdating) {
+                        lastL = 0f
+                        lastR = 0f
+                        _powerLevel.value = StereoPower(0f, 0f)
+                        _throughputBps.value = 0
+                        lastSecondTime = null
+                    }
+                } catch (e: InterruptedException) {
+                    break
+                }
+            }
+        }
+        monitorThread?.start()
     }
 
     override fun stopRecording() {
