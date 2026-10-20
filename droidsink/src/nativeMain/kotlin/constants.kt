@@ -18,7 +18,10 @@ internal val AOA_PIDS = setOf(
     0x2D05  // accessory + audio + adb
 )
 
-internal const val AUDIO_READ_BUFFER_SIZE = AUDIO_READ_BUFFER_CAPACITY_FACTOR * 128
+// number of libusb transfers kept in flight per streaming direction
+// so one buffer can be refilled while the others are being transferred
+internal const val USB_IN_FLIGHT_BUFFERS = 4
+
 internal const val AOA_INTERFACE = 0
 internal const val AOA_ENDPOINT_OUT: UByte = 0x01u
 internal const val AOA_ENDPOINT_IN: UByte = 0x81u

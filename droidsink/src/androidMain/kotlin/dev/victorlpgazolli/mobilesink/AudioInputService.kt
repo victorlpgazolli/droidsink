@@ -1,6 +1,8 @@
 package dev.victorlpgazolli.mobilesink
 
+import BYTES_PER_SAMPLE
 import CHANNELS
+import FRAMES_PER_CHUNK
 import LOG_TAG
 import SAMPLE_RATE
 import android.Manifest
@@ -21,8 +23,7 @@ class AudioInputService: AudioSource {
     private lateinit var audioBuffer: ByteArray
 
     private var fileDescriptor: ParcelFileDescriptor? = null
-    private val fileOutputStream: FileOutputStream?
-        get() = FileOutputStream(fileDescriptor?.fileDescriptor).takeIf { fileDescriptor?.fileDescriptor != null }
+    private var fileOutputStream: FileOutputStream? = null
 
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     private fun initialize() {
@@ -50,13 +51,16 @@ class AudioInputService: AudioSource {
         initialize()
 
         if (audioRecord != null && audioRecord?.state == AudioRecord.STATE_INITIALIZED) {
+            fileOutputStream = FileOutputStream(hostFileDescriptor.fileDescriptor)
             recordingThread = Thread {
                 Log.i(LOG_TAG, "Starting audio input service with fd: ${fileDescriptor?.fileDescriptor}")
                 Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
                 audioRecord?.startRecording()
 
+                val sliceSize = FRAMES_PER_CHUNK * BYTES_PER_SAMPLE * CHANNELS
+
                 while (!Thread.interrupted()) {
-                    val numberRead = audioRecord!!.read(audioBuffer, 0, audioBuffer.size)
+                    val numberRead = audioRecord!!.read(audioBuffer, 0, minOf(sliceSize, audioBuffer.size))
 
                     if (numberRead > 0) {
                         try {

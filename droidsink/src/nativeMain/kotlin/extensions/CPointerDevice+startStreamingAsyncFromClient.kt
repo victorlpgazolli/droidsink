@@ -3,6 +3,7 @@
 package extensions
 
 import AOA_ENDPOINT_IN
+import USB_IN_FLIGHT_BUFFERS
 import USB_READ_BUFFER_SIZE
 import cnames.structs.libusb_device_handle
 import kotlinx.cinterop.CPointer
@@ -26,6 +27,7 @@ internal fun CPointer<libusb_device_handle>.startStreamingAsyncFromClient(audioI
         id = "Client->Host",
         bufferSize = USB_READ_BUFFER_SIZE,
         accessoryEndpoint = AOA_ENDPOINT_IN,
+        numBuffers = USB_IN_FLIGHT_BUFFERS,
         onTransferred = { (buffer, length) ->
             val written = fwrite(buffer, 1.convert(), length.convert(), rawOutputStream)
             if (written.toInt() < length) {

@@ -3,37 +3,41 @@
 const val SAMPLE_RATE = 48000
 const val CHANNELS = 2
 const val BYTES_PER_SAMPLE = 2
-const val FRAMES_PER_CHUNK = 960 // 20 ms
+const val FRAMES_PER_CHUNK = 240 // 5 ms
 
 const val BITS_PER_SAMPLE = 16
 
 // bytes per second calculation:
 // 48.000 * 2 * 2 = 192.000 bytes per second
-// 192.000 / 100 = 192 bytes per 1ms
+// 192.000 / 1000 = 192 bytes per 1ms
+// 192 * 5 = 960 bytes per 5ms
 
-// capacity factor to sox's read buffer
-// buffer = 15 * 128 = 1920 bytes (10ms)
-// 1920 / 192 = 10ms of buffered audio
-const val AUDIO_READ_BUFFER_CAPACITY_FACTOR = 15
+// sox internal processing buffer
+// 5ms of audio per buffer, applied to both capture and playback sox instances
+const val SOX_PROCESSING_BUFFER_SIZE = FRAMES_PER_CHUNK * CHANNELS * BYTES_PER_SAMPLE // 960
 
 // USB data transfer buffer size in bytes
-// current: 3840 bytes
-// 3840 / 192 = 20ms of buffered audio
+// current: 960 bytes
+// 960 / 192 = 5ms of buffered audio per transfer
 val USB_WRITE_BUFFER_SIZE =
     FRAMES_PER_CHUNK * CHANNELS * BYTES_PER_SAMPLE
 
-val USB_READ_BUFFER_SIZE = 16384 / 4
+// USB data transfer buffer size in bytes for the microphone (client->host) path
+// 960 / 192 = 5ms of buffered audio per transfer
+val USB_READ_BUFFER_SIZE = FRAMES_PER_CHUNK * CHANNELS * BYTES_PER_SAMPLE
 
 // capacity factor to Android AudioTrack buffer
-// 3 * 20ms = 60ms of buffered audio
-const val ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR = 3
+// max(getMinBufferSize(...), 2 * 5ms chunk)
+// on top of that, PERFORMANCE_MODE_LOW_LATENCY keeps the mixer path short
+const val ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR = 2
 
-// latency summary:
-// [PC] Audio read: ~10ms
-// [PC] USB transfer: ~20ms
-// [Android] AudioTrack buffer: ~60ms
-
-// total = ~100ms of audio latency from PC to Android playback
+// theoretical latency summary (see docs/latency-study.md):
+// [PC] sox processing: ~5ms
+// [PC] USB transfer: ~5ms (4 transfers in flight, pipelined)
+// [Android] AudioTrack fast track buffer: ~5-20ms
+//
+// total = ~25-50ms of audio latency from PC to Android playback
+// (plus ~10ms of CoreAudio HAL buffer, outside of this project's control)
 
 
 const val APP_VERSION = "1.1.0"
