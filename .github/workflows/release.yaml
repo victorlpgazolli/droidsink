@@ -20,17 +20,42 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build macOS Binary
-        run: ./gradlew :droidsink:nativeBinaries
+        run: ./gradlew :droidsink:linkReleaseExecutableMacosArm64
 
       - name: Upload macOS Binary
         run: |
           ARCH=$(uname -m)
 
-          SOURCE_BIN="droidsink/build/bin/native/releaseExecutable/droidsink.kexe"
+          SOURCE_BIN="droidsink/build/bin/macosArm64/releaseExecutable/droidsink.kexe"
           TARGET_NAME="droidsink-macos-${ARCH}"
           
           cp "$SOURCE_BIN" "$TARGET_NAME"
           gh release upload ${{ github.event.release.tag_name }} "$TARGET_NAME"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        run: ./gradlew :droidsink:assembleRelease
+
+      - name: Upload APK
+        run: |
+          gh release upload ${{ github.event.release.tag_name }} \
+            droidsink/build/outputs/apk/release/droidsink-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -54,18 +79,18 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build APK and Linux Binary
-        run: ./gradlew :droidsink:assembleRelease :droidsink:nativeBinaries
+      - name: Build Linux Binary
+        run: ./gradlew :droidsink:linkReleaseExecutableLinuxX64
 
       - name: Upload Linux and Android Artifacts
         run: |
           ARCH=$(uname -m)
-          SOURCE_BIN="droidsink/build/bin/native/releaseExecutable/droidsink.kexe"
+
+          SOURCE_BIN="droidsink/build/bin/linuxX64/releaseExecutable/droidsink.kexe"
           LINUX_TARGET="droidsink-linux-${ARCH}"
+
           cp "$SOURCE_BIN" "$LINUX_TARGET"
-          
           gh release upload ${{ github.event.release.tag_name }} \
-            droidsink/build/outputs/apk/release/droidsink-release.apk \
             "$LINUX_TARGET"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
