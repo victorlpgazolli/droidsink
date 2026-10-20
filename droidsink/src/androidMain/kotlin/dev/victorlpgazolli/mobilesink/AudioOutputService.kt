@@ -66,6 +66,7 @@ class AudioOutputService : AudioSource {
                     .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                     .build())
                 .setTransferMode(AudioTrack.MODE_STREAM)
+                .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                 .setBufferSizeInBytes(maxOf(
                     AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT),
                     chunkSize * ANDROID_AUDIO_TRACK_BUFFER_CAPACITY_FACTOR
@@ -80,31 +81,23 @@ class AudioOutputService : AudioSource {
             try {
                 audioTrack.play()
                 while (!Thread.interrupted()) {
-                    var bytesRead = 0
-                    while (bytesRead < chunkSize) {
-                        val r = inputStream.read(buffer, bytesRead, chunkSize - bytesRead)
-                        if (r <= 0) break
-                        bytesRead += r
-                    }
+                    val bytesRead = inputStream.read(buffer, 0, chunkSize)
+                    if (bytesRead < 0) break
+                    if (bytesRead == 0) continue
 
-                    if (bytesRead == chunkSize) {
-                        updatePowerLevel(buffer)
-                        audioTrack.write(buffer, 0, bytesRead)
-                        
-                        bytesInSecond += bytesRead
-                        val currentTime = System.currentTimeMillis()
-                        lastSecondTime?.let {
-                            if (currentTime - it >= 1.seconds.inWholeMilliseconds) {
-                                _throughputBps.value = bytesInSecond
-                                bytesInSecond = 0
-                                lastSecondTime = currentTime
-                            }
-                        } ?: run {
+                    updatePowerLevel(buffer, bytesRead)
+                    audioTrack.write(buffer, 0, bytesRead)
+
+                    bytesInSecond += bytesRead
+                    val currentTime = System.currentTimeMillis()
+                    lastSecondTime?.let {
+                        if (currentTime - it >= 1.seconds.inWholeMilliseconds) {
+                            _throughputBps.value = bytesInSecond
+                            bytesInSecond = 0
                             lastSecondTime = currentTime
                         }
-                    } else if (bytesRead == 0) {
-                        _powerLevel.value = StereoPower(0f, 0f)
-                        _throughputBps.value = 0
+                    } ?: run {
+                        lastSecondTime = currentTime
                     }
                 }
             } catch (e: Exception) {
@@ -121,8 +114,8 @@ class AudioOutputService : AudioSource {
         playbackThread?.start()
     }
 
-    private fun updatePowerLevel(buffer: ByteArray) {
-        val shorts = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+    private fun updatePowerLevel(buffer: ByteArray, bytesRead: Int) {
+        val shorts = ByteBuffer.wrap(buffer, 0, bytesRead).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
         var sumL = 0.0
         var sumR = 0.0
         val count = shorts.capacity()

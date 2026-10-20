@@ -1,6 +1,7 @@
 package extensions
 
 import AOA_ENDPOINT_OUT
+import USB_IN_FLIGHT_BUFFERS
 import USB_WRITE_BUFFER_SIZE
 import cnames.structs.libusb_device_handle
 import kotlinx.cinterop.CPointer
@@ -31,6 +32,7 @@ internal fun CPointer<libusb_device_handle>.startStreamingAsyncFromHost(audioInt
         id = if (useFakeAudio) "Fake audio->Client" else "Host->Client",
         bufferSize = bufferSize,
         accessoryEndpoint = AOA_ENDPOINT_OUT,
+        numBuffers = USB_IN_FLIGHT_BUFFERS,
         shouldKeepInflatingBuffer = { buffer ->
             var total = 0
             while (total < bufferSize) {

@@ -8,7 +8,7 @@ internal val soxAudioInputStreamProvider =
     AudioStreamProvider { audioInterfaceName ->
         val cmd =
             """
-            sox --buffer $USB_WRITE_BUFFER_SIZE \
+            sox --buffer $SOX_PROCESSING_BUFFER_SIZE \
                 -t coreaudio "$audioInterfaceName" \
                 -r $SAMPLE_RATE -c $CHANNELS -b $BITS_PER_SAMPLE -e signed-integer -L \
                 -t raw - 2>/dev/null
@@ -25,8 +25,9 @@ internal val soxAudioOutputStreamProvider =
     AudioStreamProvider { audioInterfaceName ->
         val cmd =
             """
-            sox -t raw -r $SAMPLE_RATE -c $CHANNELS -b $BITS_PER_SAMPLE -e signed-integer -L - \
-            -t coreaudio "$audioInterfaceName" 2>/dev/null
+            sox --buffer $SOX_PROCESSING_BUFFER_SIZE \
+                -t raw -r $SAMPLE_RATE -c $CHANNELS -b $BITS_PER_SAMPLE -e signed-integer -L - \
+                -t coreaudio "$audioInterfaceName" 2>/dev/null
             """.trimIndent()
 
         val pipe =
