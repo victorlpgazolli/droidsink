@@ -6,15 +6,7 @@ plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlinxSerialization)
     alias(libs.plugins.androidApplication)
-    alias(libs.plugins.compose.compiler) apply false
-}
-
-val isNativeOnlyRequest =
-    gradle.startParameter.taskNames.isNotEmpty() &&
-        gradle.startParameter.taskNames.all { it.contains("Executable", ignoreCase = true) || it.contains("Native", ignoreCase = true) || it.contains("Macos", ignoreCase = true) || it.contains("Linux", ignoreCase = true) || it.contains("Mingw", ignoreCase = true) }
-
-if (!isNativeOnlyRequest) {
-    pluginManager.apply("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.compose.compiler)
 }
 
 group = "dev.victorlpgazolli.mobilesink"
